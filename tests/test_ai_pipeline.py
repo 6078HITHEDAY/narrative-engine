@@ -33,7 +33,7 @@ def make_state(**kwargs) -> GameState:
 
 def test_ai_generates_dialogue():
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -43,7 +43,7 @@ def test_ai_generates_dialogue():
     with patch.object(engine._director, "generate", return_value=(fake_result, '{"text": "..."}', 42)):
         result = engine.tell(state, kind="dialogue", context="测试上下文")
 
-    assert result.backend == "gpt-test"
+    assert result.backend == "openai/gpt-test"
     assert result.dialogue is not None
     assert "AI 生成" in result.dialogue.text
     assert result.tokens_used == 42
@@ -54,7 +54,7 @@ def test_ai_generates_dialogue():
 
 def test_ai_generates_description():
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -64,7 +64,7 @@ def test_ai_generates_description():
     with patch.object(engine._director, "generate", return_value=(fake_result, "raw", 30)):
         result = engine.tell(state, kind="description", context="海风吹过")
 
-    assert result.backend == "gpt-test"
+    assert result.backend == "openai/gpt-test"
     assert result.description is not None
     assert "海风" in result.description.text
 
@@ -73,7 +73,7 @@ def test_ai_generates_description():
 
 def test_filter_blocks_banned_keyword():
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         filter_blacklist=["你好我是AI", "CPU"],
         fallback_pool={"dialogue": ["（沉默）"]},
@@ -92,7 +92,7 @@ def test_filter_blocks_banned_keyword():
 def test_clean_text_passes_filter():
     """不含禁用词的合法内容直接通过"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         filter_blacklist=["你好我是AI"],
     )
@@ -103,7 +103,7 @@ def test_clean_text_passes_filter():
     with patch.object(engine._director, "generate", return_value=(fake_result, "raw", 5)):
         result = engine.tell(state, kind="dialogue", context="闲聊")
 
-    assert result.backend == "gpt-test"
+    assert result.backend == "openai/gpt-test"
     assert result.dialogue.text == "今天鱼不新鲜。"
 
 
@@ -111,7 +111,7 @@ def test_clean_text_passes_filter():
 
 def test_cache_hit_skips_ai_call(tmp_path):
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=True,
         cache_dir=str(tmp_path / "cache"),
     )
@@ -134,7 +134,7 @@ def test_cache_hit_skips_ai_call(tmp_path):
 
 def test_different_state_goes_to_ai(tmp_path):
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=True,
         cache_dir=str(tmp_path / "cache2"),
     )
@@ -151,7 +151,7 @@ def test_different_state_goes_to_ai(tmp_path):
 
 def test_anchor_beats_ai():
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         beats=[StoryBeat(id="anchor", trigger={"world.area": "test"}, text="手写文案")],
     )
     engine = NarrativeEngine(config)
@@ -169,7 +169,7 @@ def test_anchor_beats_ai():
 
 def test_ai_failure_falls_back():
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         fallback_pool={"dialogue": ["连接丢失"]},
     )
@@ -188,7 +188,7 @@ def test_ai_failure_falls_back():
 def test_memory_injects_context_into_prompt():
     """连续两次 tell()，第二次 prompt 应包含第一轮的历史。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         memory_enabled=True,
         session_turns=3,
@@ -218,7 +218,7 @@ def test_memory_injects_context_into_prompt():
 def test_anchor_also_records_turn(tmp_path):
     """锚点命中时也应记录会话轮次。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         beats=[StoryBeat(id="talk", trigger={"world.area": "test"}, text="手写回复")],
         memory_enabled=True,
         cache_enabled=True,
@@ -248,7 +248,7 @@ def test_anchor_also_records_turn(tmp_path):
 def test_memory_disabled_no_injection():
     """memory_enabled=False 时 prompt 不应有记忆块。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         memory_enabled=False,
     )

@@ -25,7 +25,7 @@ def make_state(**kwargs):
 def test_tell_stream_anchor_hits_immediately():
     """锚点命中 → 一次 yield 完整 NarrativeOutput。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         beats=[StoryBeat(id="instant", trigger={"world.area": "test"}, text="手写内容")],
     )
     engine = NarrativeEngine(config)
@@ -42,7 +42,7 @@ def test_tell_stream_anchor_hits_immediately():
 def test_tell_stream_yields_partial_models():
     """AI 生成 → 多次 yield 部分模型。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -71,7 +71,7 @@ def test_tell_stream_yields_partial_models():
 def test_tell_stream_fallback_on_error():
     """流式异常 → yield fallback。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         fallback_pool={"dialogue": ["网络错误"]},
     )
@@ -94,7 +94,7 @@ def test_tell_stream_fallback_on_error():
 def test_tell_stream_records_turn():
     """流式完成后应记录 session turn。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         memory_enabled=True,
     )

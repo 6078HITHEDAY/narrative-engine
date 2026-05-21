@@ -15,7 +15,7 @@ import sys
 
 def main() -> None:
     print("narrative-engine v0.1.0")
-    print("用法: narrative-engine [dialogue|event|describe|shell|serve] [选项]")
+    print("用法: narrative-engine [dialogue|event|describe|shell|serve|tui] [选项]")
     print()
 
     if len(sys.argv) < 2:
@@ -24,6 +24,7 @@ def main() -> None:
         print('  narrative-engine event --area "海边" --context "捡到漂流瓶"')
         print('  narrative-engine shell')
         print('  narrative-engine serve --port 8000 --story stories/seaside_town')
+        print('  narrative-engine tui')
         return
 
     cmd = sys.argv[1]
@@ -33,6 +34,8 @@ def main() -> None:
         _interactive()
     elif cmd == "serve":
         _serve(kwargs)
+    elif cmd == "tui":
+        _tui()
     elif cmd in ("dialogue", "event", "describe"):
         _run_generation(cmd, kwargs)
     else:
@@ -64,6 +67,16 @@ def _serve(kwargs: dict) -> None:
     uvicorn.run(app, host=host, port=port)
 
 
+def _tui() -> None:
+    try:
+        from narrative_engine.tui import NarrativeTUI
+    except ImportError:
+        print("需要安装 TUI 依赖: pip install narrative-engine[tui]")
+        return
+    app = NarrativeTUI()
+    app.run()
+
+
 def _parse_args(args: list[str]) -> dict:
     kwargs = {}
     i = 0
@@ -86,12 +99,13 @@ def _run_generation(kind: str, kwargs: dict) -> None:
     from narrative_engine import NarrativeEngine, GameState, WorldState, NPCState
     from narrative_engine.models.config import ProviderKind
 
-    backend = os.environ.get("NARRATIVE_BACKEND", "deepseek")
+    backend = os.environ.get("NARRATIVE_BACKEND", "openai")
     engine = NarrativeEngine({
         "backend": {
             "provider": ProviderKind(backend),
             "api_key": os.environ.get("NARRATIVE_API_KEY", ""),
             "api_base": os.environ.get("NARRATIVE_API_BASE", ""),
+            "model": os.environ.get("NARRATIVE_MODEL", ""),
         },
     })
 
@@ -123,12 +137,13 @@ def _interactive() -> None:
     from narrative_engine import NarrativeEngine, GameState, WorldState, NPCState
     from narrative_engine.models.config import ProviderKind
 
-    backend = os.environ.get("NARRATIVE_BACKEND", "deepseek")
+    backend = os.environ.get("NARRATIVE_BACKEND", "openai")
     engine = NarrativeEngine({
         "backend": {
             "provider": ProviderKind(backend),
             "api_key": os.environ.get("NARRATIVE_API_KEY", ""),
             "api_base": os.environ.get("NARRATIVE_API_BASE", ""),
+            "model": os.environ.get("NARRATIVE_MODEL", ""),
         },
     })
 

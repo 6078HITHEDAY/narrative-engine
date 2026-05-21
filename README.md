@@ -34,81 +34,53 @@ GameState ──→ StoryBeat 锚点命中？ ──→ 返回手写文案
 | 3 | **LLM 生成** | 通过 litellm + instructor 调用大模型，结构化输出自动 schema 校验 |
 | 4 | **Fallback** | 所有路径失败时返回配置的保底文案池 |
 
-### StoryBeat 触发系统
+## 多后端支持
 
-锚点触发器是引擎区别于"纯 AI 生成"的关键——作者可以在特定条件下插入手写内容，确保关键剧情节点不走 AI。
+通过 litellm 统一接口，支持两种 API 格式：
 
-```yaml
-beats:
-  - id: night_encounter
-    kind: event
-    priority: 60
-    trigger:
-      $or:
-        - world.area: "/dock|码头/"
-          world.time: night
-        - world.area: "/cemetery|墓地/"
-          world.time: dusk
-      player.attributes.san: "<=80"
-    event_title: 暗处有东西在看你
-    text: "水面下有什么巨大的轮廓缓缓滑过..."
-    event_choices:
-      - 举起相机
-      - 慢慢后退
-```
+| API 格式 | 适用服务 | base_url 示例 |
+|----------|---------|---------------|
+| **OpenAI 兼容** | DeepSeek, Ollama, vLLM, 等 | `https://api.deepseek.com` |
+| **Anthropic 兼容** | Claude 系列 | `https://api.anthropic.com` |
 
-支持的触发条件：
-- **精确匹配**：`world.area: grandma_house`
-- **比较运算符**：`player.attributes.san: "<=80"`
-- **正则**：`world.area: "/dock|码头/"`
-- **$or 条件组**：任一子条件满足即触发
-- **$not 取反**：排除特定场景
-- **虚拟字段**：`_inventory_count`、`_photos_count`、`_npc_id` 等派生值
-
-### 多后端支持
-
-通过 litellm 统一接口，支持：
-- **DeepSeek** — `deepseek/deepseek-chat`
-- **OpenAI** — `openai/gpt-4o-mini`
-- **Ollama** — `ollama/llama3:8b` 等本地模型
-- 其他 litellm 支持的提供商均可扩展
-
-### 结构化输出
-
-使用 instructor 库强制 LLM 输出符合 Pydantic schema 的 JSON。三种叙事类型各有独立模型：
-
-```python
-class Dialogue(BaseModel):
-    text: str           # 对话内容，≤200 字
-    mood_change: int    # 情绪变化，-10 ~ 10
-    unlock_hint: str    # 可选解锁线索
-
-class Event(BaseModel):
-    title: str          # 事件标题，≤60 字
-    description: str    # 事件描述，≤500 字
-    choices: list[str]  # 玩家可选行动
-    consequences: dict  # 每个行动的后果描述
-
-class Description(BaseModel):
-    text: str           # 场景描述，≤200 字
-    mood: str           # neutral / peaceful / eerie / tense / dread
-```
+只需选择 API 格式，填入 base_url、API Key 和 model 即可。不再硬编码特定提供商。
 
 ## 安装
 
 ```bash
+# 基础安装
 pip install -e .
+
+# 含 TUI 管理面板
+pip install -e ".[tui]"
+
+# 含 HTTP API
+pip install -e ".[api]"
+
+# 全部可选依赖
+pip install -e ".[tui,api,dev]"
 ```
 
 依赖：Python ≥ 3.11，pydantic ≥ 2.0，litellm ≥ 1.0，instructor ≥ 1.0，diskcache ≥ 5.0，jinja2 ≥ 3.0。
 
 ## 快速开始
 
-### 1. 配置 API 密钥
+### 1. 配置 API
+
+**方式一：环境变量**
 
 ```bash
-cp .env.example .env
-# 编辑 .env，填入 DeepSeek / OpenAI API 密钥
+export NARRATIVE_BACKEND=openai          # openai 或 anthropic
+export NARRATIVE_API_KEY=sk-xxxx
+export NARRATIVE_API_BASE=https://api.deepseek.com
+export NARRATIVE_MODEL=deepseek-v4-pro
+```
+
+**方式二：TUI 管理面板**
+
+```bash
+narrative-engine tui
+# 进入 API 配置页 (按键 1)，填入信息后点"测试连接"
 ```
 
 ### 2. 命令行
@@ -116,8 +88,10 @@ cp .env.example .env
 ```bash
 narrative-engine dialogue --area "旧码头" --npc "鱼贩老李" --context "钓上旧靴子"
 narrative-engine event --area "海边" --context "捡到漂流瓶"
-narrative-engine describe --area "废弃灯塔" --context "玩家站在灯塔前"
+narrative-engine describe --area "废弃灯塔"
 narrative-engine shell   # 交互模式
+narrative-engine tui     # TUI 管理面板
+narrative-engine serve --story stories/seaside_town  # HTTP API
 ```
 
 ### 3. Python SDK
@@ -138,12 +112,192 @@ result = engine.tell(state, kind="dialogue", npc_id="fishmonger_li",
 print(result.dialogue.text)
 ```
 
+## TUI 管理面板
+
+```
+┌──────────────────────────────────────────┐
+│  Narrative Engine TUI  v0.1.0            │
+├──────────┬───────────────────────────────┤
+│  API配置 │       内容区域                 │
+│  故事管理 │     (Screen 切换)              │
+│  NPC编辑 │                               │
+│  交互测试 │                               │
+│  记忆查看 │                               │
+├──────────┴───────────────────────────────┤
+│  Status: API Ready | Story: seaside_town │
+└──────────────────────────────────────────┘
+```
+
+5 个功能页面，键盘 `1`-`5` 切换，`q` 退出：
+
+| 页面 | 功能 |
+|------|------|
+| API 配置 | 选择 API 格式、填入 Key/Base URL/Model、测试连接、保存配置 |
+| 故事管理 | 加载/新建故事、章节切换、NPC 热重载 |
+| NPC 编辑 | NPC 列表、属性编辑、写入 npcs.yaml |
+| 交互测试 | 参数化叙事生成、流式/非流式、对话历史 |
+| 记忆查看 | 长期记忆/会话历史、清空/导出 |
+
+## 故事目录结构
+
+```
+stories/<故事名>/
+├── story.yaml          # 故事元信息 + 默认世界观 + 保底文案
+├── npcs.yaml           # NPC 定义（性格、情绪、预设记忆）
+└── chapters/
+    ├── chapter_1.yaml  # 章节：标题、世界观覆盖、beats、保底文案
+    └── chapter_2.yaml
+```
+
+### story.yaml
+
+```yaml
+title: 海边小镇
+
+default_world:
+  setting: 一个克苏鲁题材的海边小镇，诡异与日常并存。
+  tone: eerie
+
+default_fallback:
+  dialogue:
+    - "……"
+    - "风吹过，没有人说话。"
+  event:
+    - "远处有什么东西动了一下，但你没看清。"
+  description:
+    - "海风带着咸味和淡淡的腥味。"
+```
+
+### npcs.yaml
+
+```yaml
+npcs:
+  fishmonger_li:
+    name: 鱼贩老李
+    mood: grumpy
+    traits:
+      - 沉默寡言
+      - 认识奶奶
+      - 二十年老摊主
+    preset_memories:
+      - content: 二十年前欠奶奶一碗汤，至今记得那个味道
+        importance: 8
+```
+
+### 章节文件 (chapters/chapter_1.yaml)
+
+```yaml
+title: 第一章 · 抵达
+
+world:
+  area: grandma_house
+  time: 黄昏
+
+beats:
+  - id: prologue_arrival
+    kind: description
+    priority: 100
+    trigger:
+      world.area: grandma_house
+    text: "你站在奶奶的老房子前。相机挂在脖子上……"
+    mood: eerie
+```
+
+## StoryBeat 触发系统
+
+锚点触发器是引擎区别于"纯 AI 生成"的关键——作者在特定条件下插入手写内容，确保关键剧情节点不走 AI。
+
+### 触发条件类型
+
+| 类型 | 语法 | 示例 |
+|------|------|------|
+| 精确匹配 | `field: value` | `world.area: grandma_house` |
+| 比较运算符 | `field: "<=80"` | `player.attributes.san: "<=80"` |
+| 正则 | `field: "/pattern/"` | `world.area: "/dock\|码头/"` |
+| $or 组合 | `$or: [{...}, {...}]` | 任一子条件满足即触发 |
+| $not 取反 | `$not: {...}` | 排除特定场景 |
+
+### 虚拟字段
+
+| 字段 | 说明 |
+|------|------|
+| `_photos_count` | 玩家照片数量 |
+| `_inventory_count` | 背包物品数量 |
+| `_npc_id` | 当前交互 NPC 的 ID |
+
+### 完整示例
+
+```yaml
+beats:
+  - id: night_encounter
+    kind: event
+    priority: 60
+    once: true
+    trigger:
+      $or:
+        - world.area: "/dock|码头/"
+          world.time: night
+        - world.area: "/cemetery|墓地/"
+          world.time: dusk
+      player.attributes.san: "<=80"
+    event_title: 暗处有东西在看你
+    text: "水面下有什么巨大的轮廓缓缓滑过..."
+    event_choices:
+      - 举起相机
+      - 慢慢后退
+    unlocks:
+      - deep_one_sighted
+```
+
+## 结构化输出
+
+使用 instructor 强制 LLM 输出符合 Pydantic schema 的 JSON：
+
+```python
+class Dialogue(BaseModel):
+    text: str           # 对话内容，≤200 字
+    mood_change: int    # 情绪变化，-10 ~ 10
+    unlock_hint: str    # 可选解锁线索
+
+class Event(BaseModel):
+    title: str          # 事件标题，≤60 字
+    description: str    # 事件描述，≤500 字
+    choices: list[str]  # 玩家可选行动
+    consequences: dict  # 每个行动的后果描述
+
+class Description(BaseModel):
+    text: str           # 场景描述，≤200 字
+    mood: str           # neutral / peaceful / eerie / tense / dread
+```
+
+## Prompt 策略
+
+- **Temperature 动态调整** — 按叙事类型 (dialogue -0.05, event +0.1) 和 NPC 情绪 (angry +0.15, calm -0.1) 微调
+- **NPC Persona 注入** — 对话 prompt 自动注入 NPC 性格、情绪、与玩家关系值
+- **自适应重试** — LLM 调用失败后以 temperature×0.6 重试一次
+
+## HTTP API
+
+```bash
+narrative-engine serve --story stories/seaside_town --port 8000
+```
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/tell` | POST | 非流式叙事生成 |
+| `/tell/stream` | POST | SSE 流式叙事生成 |
+| `/story/info` | GET | 当前故事信息 |
+| `/story/chapters` | GET | 章节列表 |
+| `/story/chapter/{name}` | POST | 切换章节 |
+| `/story/npcs/reload` | POST | 热重载 NPC |
+
 ## 项目结构
 
 ```
 narrative-engine/
 ├── config/
-│   └── engine.yaml              # 引擎全局配置（后端、缓存、过滤）
+│   └── engine.yaml
 ├── src/narrative_engine/
 │   ├── core/
 │   │   ├── engine.py            # NarrativeEngine 主入口
@@ -158,13 +312,19 @@ narrative-engine/
 │   │   ├── app.py               # FastAPI 应用工厂
 │   │   ├── routes.py            # REST + SSE 流式路由
 │   │   └── schemas.py           # 请求/响应模型
+│   ├── tui/
+│   │   ├── app.py               # NarrativeTUI — 主 App
+│   │   ├── state.py             # TUI 全局状态
+│   │   ├── config_store.py      # API key 存储（内存 + 文件）
+│   │   ├── screens/             # 5 个功能页面
+│   │   └── widgets/             # 流式输出等组件
 │   ├── models/
-│   │   ├── config.py            # EngineConfig, LLMBackend, RuntimeConfig
+│   │   ├── config.py            # EngineConfig, LLMBackend, ProviderKind
 │   │   ├── state.py             # GameState, PlayerState, WorldState, NPCState
 │   │   ├── memory.py            # MemoryRecord, SessionTurn
 │   │   └── narrative.py         # StoryBeat, Dialogue, Event, Description
 │   ├── filters/
-│   │   └── keyword.py           # 关键词过滤 / 禁用词黑名单
+│   │   └── keyword.py           # 关键词过滤
 │   ├── prompts/
 │   │   ├── dialogue.j2          # 对话 prompt 模板
 │   │   ├── event.j2             # 事件 prompt 模板
@@ -172,20 +332,13 @@ narrative-engine/
 │   └── cli.py                   # 命令行入口
 ├── stories/
 │   └── seaside_town/
-│       ├── story.yaml           # 故事元信息
-│       ├── npcs.yaml            # NPC 定义与预设记忆
+│       ├── story.yaml
+│       ├── npcs.yaml
 │       └── chapters/
-│           └── chapter_1.yaml   # 章节（含 beats、fallback）
 ├── examples/
-│   └── basic_usage.py           # 完整使用示例
+│   └── basic_usage.py
+├── docs/                        # 详细文档
 ├── tests/
-│   ├── test_engine.py           # 引擎集成测试
-│   ├── test_beat_manager.py     # 触发器全覆盖测试
-│   ├── test_ai_pipeline.py      # AI 链路 mock 测试
-│   ├── test_memory.py           # 记忆系统测试
-│   ├── test_story_loader.py     # 故事加载测试
-│   ├── test_streaming.py        # 流式生成测试
-│   └── test_api.py              # HTTP API 测试
 └── pyproject.toml
 ```
 
@@ -193,29 +346,27 @@ narrative-engine/
 
 ### 已完成 (v0.1.0)
 
-- [x] **四级叙事流水线**：StoryBeat 锚点 → 缓存 → LLM 生成 → fallback，全部通路打通
-- [x] **StoryBeat 触发系统**：精确匹配、比较运算符（>= <= > < ==）、正则、$or/$not 组合、虚拟字段、kind 过滤、优先级排序、once 语义
-- [x] **多后端 LLM**：DeepSeek / OpenAI / Ollama，litellm 统一接口 + instructor 结构化输出
-- [x] **缓存层**：diskcache 持久化，相同 state+context+kind+model 命中
-- [x] **关键词过滤**：可配置黑名单，拦截 AI 模板话术
-- [x] **配置解释器**：从单个 story.yaml 自动解析 world / npcs / beats / fallback
-- [x] **CLI 工具**：dialogue / event / describe / shell / serve 五个子命令
+- [x] **四级叙事流水线**：StoryBeat 锚点 → 缓存 → LLM 生成 → fallback
+- [x] **StoryBeat 触发系统**：精确匹配、比较运算符、正则、$or/$not、虚拟字段、优先级、once 语义
+- [x] **多后端 LLM**：OpenAI 兼容 / Anthropic 兼容，litellm + instructor 结构化输出
+- [x] **缓存层**：diskcache 持久化，相同参数命中
+- [x] **关键词过滤**：可配置黑名单
+- [x] **配置解释器**：YAML 自动解析 world / npcs / beats / fallback
+- [x] **CLI 工具**：dialogue / event / describe / shell / serve / tui 六个子命令
+- [x] **TUI 管理面板**：5 个功能页面（API 配置、故事管理、NPC 编辑、交互测试、记忆查看）
 - [x] **Prompt 模板**：Jinja2 渲染，支持配置覆盖
-- [x] **保底文案池**：按 narrative kind 配置降级内容
-- [x] **状态持久化**：已触发锚点可保存/恢复，支持跨会话
-- [x] **NPC 记忆系统**：两层记忆（session 短期 + memory 长期），重要性淘汰、内容去重、JSON 持久化
-- [x] **多轮对话上下文**：会话内对话历史自动注入 prompt，NPC 长期记忆跨会话保留
-- [x] **故事架构**：章节独立文件、NPC 独立配置、运行时切换章节/故事、NPC 热重载、预设记忆
-- [x] **HTTP API**：FastAPI REST 接口（/tell /story/* /health），供非 Python 项目调用
-- [x] **流式输出**：SSE (Server-Sent Events) 协议，LLM token 级流式响应
-- [x] **完整测试**：110 个测试，覆盖引擎、触发器、AI 链路、记忆系统、故事加载、流式生成、HTTP API
-- [x] **示例故事**：seaside_town 包含 NPC 预设记忆、章节 beats、保底文案池
+- [x] **NPC 记忆系统**：两层记忆（session + memory），重要性淘汰、内容去重、JSON 持久化
+- [x] **故事架构**：章节独立文件、NPC 独立配置、运行时切换章节、NPC 热重载、预设记忆
+- [x] **HTTP API**：FastAPI REST（/tell /story/* /health）+ SSE 流式
+- [x] **异步支持**：全链路 async/await，asyncio.to_thread 包装磁盘 I/O
+- [x] **Prompt 策略**：Temperature 动态调整、NPC persona 注入、自适应重试
+- [x] **完整测试**：133 个测试，覆盖引擎、触发器、AI 链路、记忆、流式、API、异步、prompt 策略
+- [x] **示例故事**：seaside_town（克苏鲁题材，含 beats、NPC 预设记忆、保底文案）
 
 ### 待完成
 
-- [ ] **可视化编辑器**：StoryBeat 触发条件的 GUI 编辑工具
-- [ ] **更多 prompt 策略**：temperature 动态调整、多采样投票
-- [ ] **异步支持**：async/await 接口，支持并发调用
+- [ ] **详细文档**：完善 `docs/` 目录下的使用指南
+- [ ] **更多故事模板**：提供不同题材的示例故事
 
 ## License
 

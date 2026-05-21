@@ -28,7 +28,7 @@ def make_state(**kwargs):
 async def test_async_anchor_hit():
     """异步锚点命中。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         beats=[StoryBeat(id="async_anchor", trigger={"world.area": "灯塔"}, text="守塔人点了点头。")],
     )
     engine = NarrativeEngine(config)
@@ -44,7 +44,7 @@ async def test_async_anchor_hit():
 async def test_async_ai_generates():
     """异步 AI 生成。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -58,14 +58,14 @@ async def test_async_ai_generates():
         result = await engine.tell_async(state, kind="dialogue", context="测试")
 
     assert result.dialogue.text == "异步生成的内容"
-    assert result.backend == "gpt-test"
+    assert result.backend == "openai/gpt-test"
 
 
 @pytest.mark.asyncio
 async def test_async_cache_hit(tmp_path):
     """异步缓存命中。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=True,
         cache_dir=str(tmp_path / "cache"),
     )
@@ -93,7 +93,7 @@ async def test_async_cache_hit(tmp_path):
 async def test_async_stream():
     """异步流式生成。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -124,7 +124,7 @@ async def test_async_stream():
 async def test_async_stream_anchor():
     """异步流式锚点命中。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         beats=[StoryBeat(id="async_str_anchor", trigger={"world.area": "诊所"}, text="医生抬头。")],
     )
     engine = NarrativeEngine(config)
@@ -144,7 +144,7 @@ async def test_async_stream_anchor():
 async def test_async_fallback():
     """异步异常降级。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         fallback_pool={"dialogue": ["异步降级文案"]},
     )
@@ -165,7 +165,7 @@ async def test_async_fallback():
 async def test_async_stream_fallback():
     """异步流式异常降级。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         fallback_pool={"dialogue": ["流式降级"]},
     )
@@ -190,7 +190,7 @@ async def test_async_stream_fallback():
 async def test_async_records_turn():
     """异步生成后记录 session turn。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         memory_enabled=True,
     )

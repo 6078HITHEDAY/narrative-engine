@@ -30,7 +30,7 @@ def make_state(**kwargs):
 @pytest.fixture
 def engine():
     return NarrativeEngine(EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         memory_enabled=True,
         fallback_pool={"dialogue": ["测试降级"], "event": ["事件降级"], "description": ["描述降级"]},
@@ -68,7 +68,7 @@ def test_tell_non_stream(client, engine):
     data = resp.json()
     assert data["kind"] == "dialogue"
     assert data["dialogue"]["text"] == "你好啊旅人。"
-    assert data["backend"] == "gpt-test"
+    assert data["backend"] == "openai/gpt-test"
 
 
 def test_tell_non_stream_anchor(client, engine):

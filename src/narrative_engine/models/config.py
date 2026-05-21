@@ -9,9 +9,8 @@ from narrative_engine.models.state import NPCState
 
 
 class ProviderKind(str, Enum):
-    deepseek = "deepseek"
-    openai = "openai"
-    ollama = "ollama"
+    openai = "openai"           # OpenAI 兼容 (DeepSeek, Ollama 等)
+    anthropic = "anthropic"    # Anthropic 兼容
 
 
 class TemperatureProfile(BaseModel):
@@ -40,7 +39,7 @@ class TemperatureProfile(BaseModel):
 
 
 class LLMBackend(BaseModel):
-    provider: ProviderKind = ProviderKind.deepseek
+    provider: ProviderKind = ProviderKind.openai
     model: str = ""
     api_key: str = ""
     api_base: str | None = None
@@ -51,11 +50,12 @@ class LLMBackend(BaseModel):
 
     def resolve_model(self) -> str:
         if self.model:
-            return self.model
+            if "/" in self.model:
+                return self.model
+            return f"{self.provider.value}/{self.model}"
         defaults = {
-            ProviderKind.deepseek: "deepseek/deepseek-chat",
-            ProviderKind.openai: "openai/gpt-4o-mini",
-            ProviderKind.ollama: "ollama/llama3:8b",
+            ProviderKind.openai: "openai/deepseek-v4-pro",
+            ProviderKind.anthropic: "anthropic/claude-sonnet-4-6",
         }
         return defaults[self.provider]
 

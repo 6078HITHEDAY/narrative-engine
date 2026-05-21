@@ -79,7 +79,7 @@ def test_temperature_profile_on_backend():
 def test_persona_in_prompt():
     """有 NPC 时 prompt 包含 persona 描述。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -110,7 +110,7 @@ def test_persona_in_prompt():
 def test_no_npc_no_persona():
     """无 NPC 时 prompt 不含 persona 区块。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -132,7 +132,7 @@ def test_no_npc_no_persona():
 def test_npc_mood_in_director_call():
     """NPC mood 被传给 director 的 kind/npc_mood 参数。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
@@ -158,7 +158,7 @@ def test_retry_succeeds_on_second_attempt():
     """第一次失败、第二次成功 → 返回结果。"""
     from narrative_engine.core.director import AIDirector
 
-    backend = LLMBackend(provider=ProviderKind.openai, model="gpt-test", temperature=0.8)
+    backend = LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test", temperature=0.8)
     director = AIDirector(backend)
 
     call_count = 0
@@ -187,7 +187,7 @@ def test_retry_exhausted_raises():
     """两次都失败 → 上抛异常。"""
     from narrative_engine.core.director import AIDirector
 
-    backend = LLMBackend(provider=ProviderKind.openai, model="gpt-test", temperature=0.8)
+    backend = LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test", temperature=0.8)
     director = AIDirector(backend)
 
     def always_fail(**kwargs):
@@ -201,7 +201,7 @@ def test_retry_exhausted_raises():
 def test_retry_triggers_fallback_in_engine():
     """engine 层：retry 耗尽后走 fallback。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test"),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
         cache_enabled=False,
         fallback_pool={"dialogue": ["重试失败降级"]},
     )
@@ -223,7 +223,7 @@ async def test_async_retry_succeeds_on_second_attempt():
     """异步重试：第一次失败第二次成功。"""
     from narrative_engine.core.director import AIDirector
 
-    backend = LLMBackend(provider=ProviderKind.openai, model="gpt-test", temperature=0.8)
+    backend = LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test", temperature=0.8)
     director = AIDirector(backend)
 
     call_count = 0
@@ -252,7 +252,7 @@ async def test_async_retry_succeeds_on_second_attempt():
 def test_temperature_passed_to_director():
     """engine 把 kind/npc_mood 传给 director，_resolve_temperature 被调用。"""
     config = EngineConfig(
-        backend=LLMBackend(provider=ProviderKind.openai, model="gpt-test", temperature=0.8),
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test", temperature=0.8),
         cache_enabled=False,
     )
     engine = NarrativeEngine(config)
