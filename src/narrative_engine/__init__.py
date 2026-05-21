@@ -12,6 +12,7 @@ from narrative_engine.models.config import (
     ProviderKind,
     RuntimeConfig,
     StoryMeta,
+    TemperatureProfile,
     WorldConfig,
 )
 from narrative_engine.models.memory import MemoryRecord, SessionTurn
@@ -32,6 +33,7 @@ __all__ = [
     "ProviderKind",
     "RuntimeConfig",
     "StoryMeta",
+    "TemperatureProfile",
     "WorldConfig",
     "MemoryRecord",
     "SessionTurn",

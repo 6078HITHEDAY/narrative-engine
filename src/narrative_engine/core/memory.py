@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -120,3 +121,27 @@ class MemoryManager:
         self._memories.clear()
         self._turns.clear()
         self._turn_counter = 0
+
+    async def asave(self, path: str | None = None) -> None:
+        p = Path(path) if path else self._path
+        if not p:
+            return
+        p.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            npc_id: [r.model_dump() for r in records]
+            for npc_id, records in self._memories.items()
+        }
+        await asyncio.to_thread(
+            p.write_text,
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    async def aload(self, path: str | None = None) -> None:
+        p = Path(path) if path else self._path
+        if not p or not p.exists():
+            return
+        text = await asyncio.to_thread(p.read_text, encoding="utf-8")
+        data = json.loads(text)
+        for npc_id, records in data.items():
+            self._memories[npc_id] = [MemoryRecord(**r) for r in records]

@@ -278,10 +278,13 @@ class NarrativeEngine:
         # ---- AI 生成 ----
         session_ctx = self._memory.session_context() if self._memory else ""
         mem_ctx = self._memory.memory_context(npc_id) if npc_id and self._memory else ""
-        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx)
+        npc = state.npcs.get(npc_id) if npc_id else None
+        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx, npc=npc)
 
         try:
-            result, raw, tokens = self._director.generate(prompt, schema)
+            result, raw, tokens = self._director.generate(
+                prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
+            )
         except Exception:
             return self._fallback(kind, npc_id, context)
 
@@ -291,6 +294,78 @@ class NarrativeEngine:
 
         if self._cache:
             self._cache.set(state_json, context, kind, self._director.model_name, result.model_dump())
+
+        self._record_turn(npc_id, context, text, kind)
+
+        return NarrativeOutput(
+            kind=kind,
+            dialogue=result if isinstance(result, Dialogue) else None,
+            event=result if isinstance(result, Event) else None,
+            description=result if isinstance(result, Description) else None,
+            tokens_used=tokens,
+            cached=False,
+            backend=self._director.model_name,
+            raw=raw,
+        )
+
+    async def tell_async(
+        self,
+        state: GameState | dict,
+        kind: str,
+        context: str = "",
+        npc_id: str = "",
+    ) -> NarrativeOutput:
+        """异步版 tell()。与同步版相同的四级流水线。"""
+        if isinstance(state, dict):
+            state = GameState(**state)
+
+        if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
+            state.npcs[npc_id] = self._npcs[npc_id]
+
+        beat = self._beat_manager.check(state, kind=kind, npc_id=npc_id)
+        if beat and beat.hand_written:
+            self._beat_manager.mark_fired(beat.id)
+            await self._beat_manager.asave()
+            output = beat.hand_written
+            output.cached = False
+            output.backend = "storybeat"
+            self._record_turn(npc_id, context, self._output_text(output), kind)
+            return output
+
+        schema = _OUTPUT_SCHEMAS.get(kind, Dialogue)
+        state_json = state.model_dump_json()
+
+        if self._cache:
+            cached = await self._cache.aget(state_json, context, kind, self._director.model_name)
+            if cached:
+                return NarrativeOutput(
+                    kind=kind,
+                    dialogue=Dialogue(**cached) if kind == "dialogue" else None,
+                    event=Event(**cached) if kind == "event" else None,
+                    description=Description(**cached) if kind == "description" else None,
+                    tokens_used=0,
+                    cached=True,
+                    backend=self._director.model_name,
+                )
+
+        session_ctx = self._memory.session_context() if self._memory else ""
+        mem_ctx = self._memory.memory_context(npc_id) if npc_id and self._memory else ""
+        npc = state.npcs.get(npc_id) if npc_id else None
+        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx, npc=npc)
+
+        try:
+            result, raw, tokens = await self._director.generate_async(
+                prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
+            )
+        except Exception:
+            return self._fallback(kind, npc_id, context)
+
+        text = self._extract_text(result)
+        if self._filter and text and not self._filter.validate(text):
+            return self._fallback(kind, npc_id, context)
+
+        if self._cache:
+            await self._cache.aset(state_json, context, kind, self._director.model_name, result.model_dump())
 
         self._record_turn(npc_id, context, text, kind)
 
@@ -335,12 +410,15 @@ class NarrativeEngine:
         schema = _OUTPUT_SCHEMAS.get(kind, Dialogue)
         session_ctx = self._memory.session_context() if self._memory else ""
         mem_ctx = self._memory.memory_context(npc_id) if npc_id and self._memory else ""
-        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx)
+        npc = state.npcs.get(npc_id) if npc_id else None
+        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx, npc=npc)
 
         # 流式生成
         final_text = ""
         try:
-            for partial in self._director.generate_stream(prompt, schema):
+            for partial in self._director.generate_stream(
+                prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
+            ):
                 yield partial
                 part = getattr(partial, "text", None)
                 if part:
@@ -354,6 +432,60 @@ class NarrativeEngine:
             return
 
         self._record_turn(npc_id, context, final_text, kind)
+
+    async def tell_stream_async(
+        self,
+        state: GameState | dict,
+        kind: str,
+        context: str = "",
+        npc_id: str = "",
+    ):
+        """异步流式叙事生成。"""
+        if isinstance(state, dict):
+            state = GameState(**state)
+
+        if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
+            state.npcs[npc_id] = self._npcs[npc_id]
+
+        beat = self._beat_manager.check(state, kind=kind, npc_id=npc_id)
+        if beat and beat.hand_written:
+            self._beat_manager.mark_fired(beat.id)
+            await self._beat_manager.asave()
+            output = beat.hand_written
+            output.cached = False
+            output.backend = "storybeat"
+            self._record_turn(npc_id, context, self._output_text(output), kind)
+            yield output
+            return
+
+        schema = _OUTPUT_SCHEMAS.get(kind, Dialogue)
+        session_ctx = self._memory.session_context() if self._memory else ""
+        mem_ctx = self._memory.memory_context(npc_id) if npc_id and self._memory else ""
+        npc = state.npcs.get(npc_id) if npc_id else None
+        prompt = self._context_mgr.build(state, kind, context, session_ctx, mem_ctx, npc=npc)
+
+        final_text = ""
+        try:
+            async for partial in self._director.generate_stream_async(
+                prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
+            ):
+                yield partial
+                part = getattr(partial, "text", None)
+                if part:
+                    final_text = part
+                elif hasattr(partial, "description"):
+                    d = getattr(partial, "description", "")
+                    if d:
+                        final_text = d
+        except Exception:
+            yield self._fallback(kind, npc_id, context)
+            return
+
+        self._record_turn(npc_id, context, final_text, kind)
+
+    async def load_story_async(self, story_dir: str, chapter: str | None = None) -> None:
+        import asyncio
+        await asyncio.to_thread(self.load_story, story_dir, chapter)
 
     def _record_turn(self, npc_id: str, context: str, text: str, kind: str) -> None:
         if not self._memory:

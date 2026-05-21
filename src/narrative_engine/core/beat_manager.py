@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -59,6 +60,25 @@ class BeatManager:
         if not p or not p.exists():
             return
         data = json.loads(p.read_text(encoding="utf-8"))
+        self._fired = set(data.get("fired", []))
+
+    async def asave(self, path: str | None = None) -> None:
+        p = Path(path) if path else self._state_path
+        if not p:
+            return
+        p.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            p.write_text,
+            json.dumps({"fired": sorted(self._fired)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    async def aload(self, path: str | None = None) -> None:
+        p = Path(path) if path else self._state_path
+        if not p or not p.exists():
+            return
+        text = await asyncio.to_thread(p.read_text, encoding="utf-8")
+        data = json.loads(text)
         self._fired = set(data.get("fired", []))
 
     def check(self, state: GameState, kind: str = "", npc_id: str = "") -> StoryBeat | None:

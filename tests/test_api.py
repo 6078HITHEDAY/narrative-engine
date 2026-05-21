@@ -54,10 +54,10 @@ def test_health(client):
 # ---- /tell 非流式 ----
 
 def test_tell_non_stream(client, engine):
-    def fake_gen(prompt, schema):
+    async def fake_gen(prompt, schema, **kwargs):
         return Dialogue(text="你好啊旅人。"), "raw", 10
 
-    with patch.object(engine._director, "generate", side_effect=fake_gen):
+    with patch.object(engine._director, "generate_async", side_effect=fake_gen):
         resp = client.post("/tell", json={
             "state": make_state(world={"area": "旧码头"}).model_dump(),
             "kind": "dialogue",
@@ -89,10 +89,10 @@ def test_tell_non_stream_anchor(client, engine):
 
 
 def test_tell_non_stream_fallback(client, engine):
-    def fake_gen(prompt, schema):
+    async def fake_gen(prompt, schema, **kwargs):
         raise ConnectionError("boom")
 
-    with patch.object(engine._director, "generate", side_effect=fake_gen):
+    with patch.object(engine._director, "generate_async", side_effect=fake_gen):
         resp = client.post("/tell", json={
             "state": make_state(world={"area": "测试"}).model_dump(),
             "kind": "dialogue",
@@ -114,11 +114,11 @@ def test_tell_stream_sse(client, engine):
         Dialogue(text="今天的鱼不新鲜。", mood_change=0),
     ]
 
-    def fake_stream(prompt, schema):
+    async def fake_stream(prompt, schema, **kwargs):
         for p in partials:
             yield p
 
-    with patch.object(engine._director, "generate_stream", side_effect=fake_stream):
+    with patch.object(engine._director, "generate_stream_async", side_effect=fake_stream):
         resp = client.post("/tell", json={
             "state": make_state(world={"area": "测试"}).model_dump(),
             "kind": "dialogue",
@@ -162,11 +162,11 @@ def test_tell_stream_anchor_sse(client, engine):
 
 
 def test_tell_stream_fallback_sse(client, engine):
-    def fake_stream(prompt, schema):
+    async def fake_stream(prompt, schema, **kwargs):
         raise ConnectionError("中断")
         yield
 
-    with patch.object(engine._director, "generate_stream", side_effect=fake_stream):
+    with patch.object(engine._director, "generate_stream_async", side_effect=fake_stream):
         resp = client.post("/tell", json={
             "state": make_state(world={"area": "测试"}).model_dump(),
             "kind": "dialogue",
@@ -272,10 +272,10 @@ def test_npcs_reload_no_story(client):
 def test_tell_with_npc_autocomplete(client, engine):
     engine._npcs["fishmonger"] = NPCState(id="fishmonger", name="鱼贩老李")
 
-    def fake_gen(prompt, schema):
+    async def fake_gen(prompt, schema, **kwargs):
         return Dialogue(text="今天的鱼很新鲜。"), "raw", 5
 
-    with patch.object(engine._director, "generate", side_effect=fake_gen):
+    with patch.object(engine._director, "generate_async", side_effect=fake_gen):
         resp = client.post("/tell", json={
             "state": make_state(world={"area": "码头"}).model_dump(),
             "kind": "dialogue",

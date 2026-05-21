@@ -2,6 +2,11 @@
 你生活在一个被规则所支配的世界里。{{ world_setting }}
 {% endif %}
 
+{% if npc %}
+## 你的角色
+你是 {{ npc.name }}。性格特点：{{ npc.traits | join("、") or "暂无描述" }}。当前情绪：{{ npc.mood }}。与玩家的关系亲密度：{{ npc.relationship }}。
+{% endif %}
+
 当前游戏状态：
 {{ state_json }}
 

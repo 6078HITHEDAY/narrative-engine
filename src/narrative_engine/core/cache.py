@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -34,3 +35,21 @@ class CacheManager:
 
     def clear(self) -> None:
         self._cache.clear()
+
+    async def aget(
+        self, state_json: str, context: str, kind: str, model: str
+    ) -> dict | None:
+        key = self._make_key(self._state_hash(state_json), context, kind, model)
+        try:
+            return await asyncio.to_thread(self._cache.get, key)
+        except Exception:
+            return None
+
+    async def aset(
+        self, state_json: str, context: str, kind: str, model: str, value: dict
+    ) -> None:
+        key = self._make_key(self._state_hash(state_json), context, kind, model)
+        try:
+            await asyncio.to_thread(self._cache.set, key, value)
+        except Exception:
+            pass

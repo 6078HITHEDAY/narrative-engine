@@ -8,6 +8,7 @@ from narrative_engine.models.state import GameState
 
 if TYPE_CHECKING:
     from narrative_engine.models.config import PromptTemplates
+    from narrative_engine.models.state import NPCState
 
 
 class ContextManager:
@@ -25,6 +26,7 @@ class ContextManager:
     def build(
         self, state: GameState, kind: str, context: str,
         session_context: str = "", memory_context: str = "",
+        npc: NPCState | None = None,
     ) -> str:
         render_kwargs = {
             "world_setting": self._world_setting,
@@ -33,6 +35,7 @@ class ContextManager:
             "context": context,
             "session_context": session_context,
             "memory_context": memory_context,
+            "npc": npc,
         }
 
         # 配置模板覆盖优先

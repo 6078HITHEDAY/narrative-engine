@@ -55,7 +55,7 @@ def test_tell_stream_yields_partial_models():
         Dialogue(text="今天的鱼不新鲜。", mood_change=0),
     ]
 
-    def fake_stream(prompt, schema):
+    def fake_stream(prompt, schema, **kwargs):
         for p in partials:
             yield p
 
@@ -78,7 +78,7 @@ def test_tell_stream_fallback_on_error():
     engine = NarrativeEngine(config)
     state = make_state(world={"area": "测试"})
 
-    def fake_stream(prompt, schema):
+    def fake_stream(prompt, schema, **kwargs):
         raise ConnectionError("网络中断")
         yield
 
@@ -101,7 +101,7 @@ def test_tell_stream_records_turn():
     engine = NarrativeEngine(config)
     state = make_state(world={"area": "测试"})
 
-    def fake_stream(prompt, schema):
+    def fake_stream(prompt, schema, **kwargs):
         yield Dialogue(text="AI 流式回复")
 
     with patch.object(engine._director, "generate_stream", side_effect=fake_stream):

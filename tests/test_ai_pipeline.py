@@ -198,7 +198,7 @@ def test_memory_injects_context_into_prompt():
 
     captured_prompts = []
 
-    def capture_and_return(prompt, schema):
+    def capture_and_return(prompt, schema, **kwargs):
         captured_prompts.append(prompt)
         return Dialogue(text="AI 回复"), "raw", 10
 
@@ -233,7 +233,7 @@ def test_anchor_also_records_turn(tmp_path):
     fake = Dialogue(text="AI 跟进")
     captured = []
 
-    def capture(prompt, schema):
+    def capture(prompt, schema, **kwargs):
         captured.append(prompt)
         return fake, "raw", 10
 
@@ -257,7 +257,7 @@ def test_memory_disabled_no_injection():
 
     captured = []
 
-    def capture(prompt, schema):
+    def capture(prompt, schema, **kwargs):
         captured.append(prompt)
         return Dialogue(text="回复"), "raw", 10
 

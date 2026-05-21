@@ -14,6 +14,31 @@ class ProviderKind(str, Enum):
     ollama = "ollama"
 
 
+class TemperatureProfile(BaseModel):
+    """动态 temperature 调整策略。"""
+    enabled: bool = True
+    kind_adjustments: dict[str, float] = Field(default_factory=lambda: {
+        "dialogue": -0.05,
+        "event": 0.1,
+        "description": 0.0,
+    })
+    mood_adjustments: dict[str, float] = Field(default_factory=lambda: {
+        "angry": 0.15,
+        "excited": 0.1,
+        "calm": -0.1,
+        "peaceful": -0.1,
+        "sad": -0.05,
+        "neutral": 0.0,
+    })
+
+    def resolve(self, base_temp: float, kind: str = "", npc_mood: str = "") -> float:
+        if not self.enabled:
+            return base_temp
+        kind_adj = self.kind_adjustments.get(kind, 0.0)
+        mood_adj = self.mood_adjustments.get(npc_mood, 0.0)
+        return max(0.1, min(2.0, base_temp + kind_adj + mood_adj))
+
+
 class LLMBackend(BaseModel):
     provider: ProviderKind = ProviderKind.deepseek
     model: str = ""
@@ -22,6 +47,7 @@ class LLMBackend(BaseModel):
     temperature: float = Field(default=0.8, ge=0.0, le=2.0)
     max_tokens: int = 256
     timeout: float = 10.0
+    temperature_profile: TemperatureProfile = Field(default_factory=TemperatureProfile)
 
     def resolve_model(self) -> str:
         if self.model:

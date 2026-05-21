@@ -31,7 +31,7 @@ async def tell(req: TellRequest, request: Request):
 
     if req.stream:
         async def sse_stream():
-            for partial in engine.tell_stream(req.state, req.kind, req.context, req.npc_id):
+            async for partial in engine.tell_stream_async(req.state, req.kind, req.context, req.npc_id):
                 if isinstance(partial, NarrativeOutput):
                     yield f"data: {partial.model_dump_json(ensure_ascii=False)}\n\n"
                     yield "data: [DONE]\n\n"
@@ -41,7 +41,7 @@ async def tell(req: TellRequest, request: Request):
 
         return StreamingResponse(sse_stream(), media_type="text/event-stream")
 
-    result = engine.tell(req.state, req.kind, req.context, req.npc_id)
+    result = await engine.tell_async(req.state, req.kind, req.context, req.npc_id)
     return result.model_dump()
 
 
@@ -61,7 +61,7 @@ async def story_info(request: Request):
 @router.post("/story/load")
 async def story_load(req: StoryLoadRequest, request: Request):
     engine = await _get_engine(request)
-    engine.load_story(req.story_dir, chapter=req.chapter)
+    await engine.load_story_async(req.story_dir, chapter=req.chapter)
     return {"status": "ok", "chapter": engine.current_chapter}
 
 
