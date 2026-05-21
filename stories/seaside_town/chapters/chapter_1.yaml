@@ -1,0 +1,89 @@
+# 第一章 · 抵达小镇
+title: 第一章 · 抵达
+
+world:
+  area: grandma_house
+  time: 黄昏
+
+beats:
+  # ===== 开场锚点 =====
+  - id: prologue_arrival
+    title: 初次抵达
+    kind: description
+    priority: 100
+    trigger:
+      world.area: grandma_house
+      world.chapter: 第一章
+    text: "你站在奶奶的老房子前。相机挂在脖子上，镜头盖内刻着一行字：「拍下你想留下的，删除你想忘记的。」"
+    mood: eerie
+    unlocks:
+      - chapter1_start
+
+  # ===== 中段锚点：照片数量 >= 12 =====
+  - id: camera_unlock
+    title: 相机觉醒
+    kind: event
+    priority: 50
+    trigger:
+      _photos_count: ">=12"
+    event_title: 照片里的眼睛眨了眨
+    text: "你翻看相册，突然发现某张照片里——鱼摊老板对你眨了眨眼。但照片是静止的。相机背面多了一行你从未见过的刻度，那是「冲印」功能的标记。"
+    event_choices:
+      - 立刻冲印那张照片
+      - 合上相册，当没看见
+    event_consequences:
+      立刻冲印那张照片: 照片从相纸里浮现，鱼贩的身影变成了实体站在你面前
+      合上相册当没看见: 相机微微发烫，那个刻度线在黑暗中泛着微光，等待你的决定
+    unlocks:
+      - printing_unlocked
+
+  # ===== NPC 特定锚点 =====
+  - id: fishmonger_recognize
+    title: 老李认出你
+    kind: dialogue
+    priority: 80
+    trigger:
+      world.area: old_dock
+      _npc_id: fishmonger_li
+      player.flags.met_li: true
+    text: "你奶奶……欠我一碗汤。二十年了。"
+    mood_change: -1
+    unlock_hint: grandma_recipe_soup
+
+  # ===== $or + 正则 + 比较 示例 =====
+  - id: night_encounter
+    title: 深夜的不速之客
+    kind: event
+    priority: 60
+    once: false
+    trigger:
+      $or:
+        - world.area: "/dock|码头/"
+          world.time: night
+        - world.area: "/cemetery|墓地|坟墓/"
+          world.time: dusk
+      player.attributes.san: "<=80"
+    event_title: 暗处有东西在看你
+    text: "水面下有什么巨大的轮廓缓缓滑过。你数不清那是鱼鳞还是别的什么，但它的眼睛在黑暗里追踪着你的每一个动作。"
+    event_choices:
+      - 举起相机
+      - 慢慢后退
+      - 扔一块石头
+    event_consequences:
+      举起相机: 取景框里的画面让你的手止不住地颤抖——那不是鱼。
+      慢慢后退: 它没有追上来，但你清楚地听到了水花溅起又迅速沉没的声音。
+      扔一块石头: 水面猛地炸开。你什么都看不清，只知道那东西的速度远超你的预期。
+
+  # ===== $not 取反示例 =====
+  - id: unsafe_path
+    title: 危险的岔路
+    kind: description
+    priority: 40
+    trigger:
+      $not:
+        $or:
+          - world.area: market
+          - world.area: grandma_house
+      player.attributes.san: "<=60"
+    text: "你拐进了一条游客不会踏足的小路。石板湿滑，空气里弥漫着说不清的腥味，两侧的阴影比别处更深。"
+    mood: eerie

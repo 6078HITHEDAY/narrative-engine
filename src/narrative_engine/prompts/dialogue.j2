@@ -1,0 +1,27 @@
+{% if world_setting %}
+你生活在一个被规则所支配的世界里。{{ world_setting }}
+{% endif %}
+
+当前游戏状态：
+{{ state_json }}
+
+{% if session_context %}
+## 最近对话
+{{ session_context }}
+{% endif %}
+
+{% if memory_context %}
+## 关于这位 NPC 的记忆
+{{ memory_context }}
+{% endif %}
+
+请生成一段 NPC 对话。对话要求：
+- 长度控制在 20 字以内
+- 语气自然，符合 NPC 的性格和当前情绪
+- 不要使用现代科技词汇（CPU、AI、手机等）
+- 可以暗示隐藏信息或解锁线索
+
+情境：{{ context }}
+
+请以 JSON 格式返回：
+{"text": "对话内容", "mood_change": 0, "unlock_hint": null}

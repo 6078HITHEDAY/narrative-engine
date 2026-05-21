@@ -1,0 +1,25 @@
+# narrative-engine 引擎配置
+# 剧情内容请放到 stories/<故事名>/story.yaml
+
+backend:
+  provider: deepseek
+  model: ""            # 留空使用 provider 默认模型
+  temperature: 0.8
+  max_tokens: 256
+
+cache_enabled: true
+cache_dir: .cache/narrative_engine
+
+filter_enabled: true
+filter_blacklist:
+  - "CPU"
+  - "GPU"
+  - "你好我是AI"
+  - "作为一个人工智能"
+  - "according to my training"
+  - "as an AI language model"
+
+templates:
+  dialogue: ""
+  event: ""
+  description: ""

@@ -1,0 +1,9 @@
+# narrative-engine
+
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+.env
+dist/
+*.egg-info/

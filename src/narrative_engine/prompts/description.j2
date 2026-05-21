@@ -1,0 +1,27 @@
+{% if world_setting %}
+世界观设定：{{ world_setting }}
+{% endif %}
+
+当前游戏状态：
+{{ state_json }}
+
+{% if session_context %}
+## 最近发生的事
+{{ session_context }}
+{% endif %}
+
+{% if memory_context %}
+## 相关记忆
+{{ memory_context }}
+{% endif %}
+
+请生成一段场景氛围描述。描述要求：
+- 一句话，不超过 40 字
+- 用感官细节（视觉、听觉、嗅觉）营造氛围
+- 可以略带克苏鲁式的诡异感，但保持克制
+- 不要使用现代科技词汇
+
+情境：{{ context }}
+
+请以 JSON 格式返回：
+{"text": "场景描述", "mood": "neutral/peaceful/eerie/tense/dread", "detail": null}

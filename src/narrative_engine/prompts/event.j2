@@ -1,0 +1,27 @@
+{% if world_setting %}
+世界观设定：{{ world_setting }}
+{% endif %}
+
+当前游戏状态：
+{{ state_json }}
+
+{% if session_context %}
+## 最近发生的事
+{{ session_context }}
+{% endif %}
+
+{% if memory_context %}
+## 相关记忆
+{{ memory_context }}
+{% endif %}
+
+请生成一个支线事件。事件要求：
+- 标题有悬念感，不超过 20 字
+- 描述诡异但克制，不超过 100 字
+- 给出 2-3 个玩家可选行动
+- 每个行动有对应的后果简述
+
+情境：{{ context }}
+
+请以 JSON 格式返回：
+{"title": "事件标题", "description": "事件描述", "choices": ["选项1", "选项2"], "consequences": {"选项1": "后果", "选项2": "后果"}}

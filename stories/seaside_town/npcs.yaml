@@ -1,0 +1,31 @@
+# 海边小镇 NPC 配置
+npcs:
+  fishmonger_li:
+    name: 鱼贩老李
+    mood: grumpy
+    traits:
+      - 沉默寡言
+      - 认识奶奶
+      - 二十年老摊主
+    preset_memories:
+      - content: 二十年前欠奶奶一碗汤，至今记得那个味道
+        importance: 8
+
+  lighthouse_keeper:
+    name: 灯塔守灯人
+    mood: mysterious
+    traits:
+      - 从不说话
+      - 只在黄昏出现
+      - 手里永远提着一盏不灭的灯
+
+  bakery_aunt:
+    name: 面包房阿姨
+    mood: cheerful
+    traits:
+      - 热心肠
+      - 面包里偶尔会出现预言形状
+      - 总是多给你一块
+    preset_memories:
+      - content: 奶奶以前每周五都来买黑麦面包
+        importance: 5
