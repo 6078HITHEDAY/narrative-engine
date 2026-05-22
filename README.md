@@ -1,28 +1,59 @@
 # narrative-engine
 
-通用 AI 驱动的叙事生成引擎。将游戏状态作为输入，产出符合世界观的对话、事件、场景描述——并支持手写剧情锚点覆盖 AI 输出，在可控性与生成自由度之间取平衡。
+**通用 AI 互动叙事引擎**。输入结构化游戏状态，输出结构化叙事内容（对话/事件/场景描述）；锚点系统让作者保留剧情控制权，AI 填充剩余血肉。任何 "固定骨架 + AI 血肉" 的叙事项目都能复用——文字冒险、视觉小说、生活模拟、TRPG 跑团辅助、克苏鲁/恐怖叙事。
 
 ## 这是什么
 
 narrative-engine 是一个**底层叙事中间件**。
 
-> 接收结构化的游戏状态（玩家属性、世界参数、NPC 列表、历史记录），返回结构化的叙事内容（对话、事件、场景描述）。
+> 接收结构化的游戏状态（玩家属性、世界参数、NPC 列表、持有物、历史），返回结构化的叙事内容；通过 `apply_choice()` 把玩家选择反馈进状态，驱动下一轮生成，构成完整的互动循环。
 
-其他项目可以作为 Python 库引入，通过配置自己的故事文件来驱动 AI 叙事。
+引擎不绑定任何具体游戏——`stories/seaside_town/` 是参考实现，作者按目录约定（`story.yaml` / `npcs.yaml` / `chapters/`）写自己的故事即可，无需改 `src/` 任何代码。
+
+## 目标场景
+
+| 项目类型 | 引擎能做的 |
+|----------|-----------|
+| 文字冒险 / 视觉小说 | NPC 对话生成、分支事件 + choice 闭环 |
+| 生活模拟 | 场景描述、随机支线事件、NPC 关系记忆 |
+| TRPG 跑团辅助 | DM 视角的事件推进 + NPC 反应生成 |
+| 克苏鲁 / 恐怖叙事 | 氛围描述、随状态恶化的扭曲文本 |
+| 嵌入既有游戏引擎 | 作为 Python 库供 Godot/Unity/Web 后端调用 |
+
+## 两种用法
+
+**独立运行**（开箱即用）：
+
+```bash
+narrative-engine tui                                    # TUI 管理面板
+narrative-engine serve --story stories/seaside_town     # HTTP API
+python examples/interactive_demo.py stories/<your>      # 终端交互 demo
+```
+
+**作为库引入**（嵌入你的游戏）：
+
+```python
+from narrative_engine import NarrativeEngine
+engine = NarrativeEngine.from_story("stories/<your_story>")
+result = engine.tell(state, kind="dialogue", npc_id="...")
+engine.apply_choice(state, result.event, choice_text)   # choice 反馈
+```
 
 ## 核心设计
 
 ```
 GameState ──→ StoryBeat 锚点命中？ ──→ 返回手写文案
-                │ 否
-                ▼
-              缓存命中？ ──→ 返回缓存结果
-                │ 否
-                ▼
-              LLM 生成 ──→ 关键词过滤 ──→ 写入缓存 ──→ 返回
-                │ 失败
-                ▼
-            降级保底文案
+   ↑            │ 否
+   │            ▼
+   │          缓存命中？ ──→ 返回缓存结果
+   │            │ 否
+   │            ▼
+   │          LLM 生成 ──→ 关键词过滤 ──→ 写入缓存 ──→ 返回
+   │            │ 失败
+   │            ▼
+   │        降级保底文案
+   │
+   └── apply_choice(state, event, choice) ←── 玩家选了选项
 ```
 
 ### 四级流水线
@@ -221,7 +252,7 @@ beats:
 
 | 字段 | 说明 |
 |------|------|
-| `_photos_count` | 玩家照片数量 |
+| `_history_count` | history 条数 |
 | `_inventory_count` | 背包物品数量 |
 | `_npc_id` | 当前交互 NPC 的 ID |
 
@@ -285,12 +316,28 @@ narrative-engine serve --story stories/seaside_town --port 8000
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `/health` | GET | 健康检查 |
-| `/tell` | POST | 非流式叙事生成 |
-| `/tell/stream` | POST | SSE 流式叙事生成 |
-| `/story/info` | GET | 当前故事信息 |
+| `/tell` | POST | 叙事生成（流式由 body 的 `stream: true` 切换） |
+| `/story` | GET | 当前故事信息 |
+| `/story/load` | POST | 加载/切换到指定故事目录 |
 | `/story/chapters` | GET | 章节列表 |
-| `/story/chapter/{name}` | POST | 切换章节 |
+| `/story/chapter/switch` | POST | 切换章节（body: `{"chapter": "<name>"}`） |
 | `/story/npcs/reload` | POST | 热重载 NPC |
+
+## 启动验证
+
+改完代码、提 PR 前，跑一次 `run` skill 把三个表面都点一遍——`pytest` 通过不代表 import / 路由装配 / TUI mount 不会回归。
+
+```bash
+.claude/skills/run/driver.sh           # CLI + HTTP + TUI 全跑
+.claude/skills/run/driver.sh cli       # 只验 CLI
+.claude/skills/run/driver.sh http      # serve + /health + /story + /tell（beat-anchored，无需 LLM key）
+.claude/skills/run/driver.sh tui       # textual headless smoke
+
+PORT=19000 STORY=stories/seaside_town .claude/skills/run/driver.sh http
+NO_TELL=1 .claude/skills/run/driver.sh http        # 跳过 /tell（用于非 seaside_town 故事）
+```
+
+退出码非零代表至少一个表面挂了，详见 `.claude/skills/run/SKILL.md`。
 
 ## 项目结构
 
@@ -339,6 +386,7 @@ narrative-engine/
 │   └── basic_usage.py
 ├── docs/                        # 详细文档
 ├── tests/
+├── .claude/skills/run/          # 三表面启动验证 skill（CLI/HTTP/TUI smoke）
 └── pyproject.toml
 ```
 

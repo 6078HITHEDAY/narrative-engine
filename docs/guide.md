@@ -6,12 +6,15 @@
 2. [安装](#安装)
 3. [API 配置](#api-配置)
 4. [故事编写](#故事编写)
-5. [Python SDK](#python-sdk)
-6. [CLI 工具](#cli-工具)
-7. [TUI 管理面板](#tui-管理面板)
-8. [HTTP API](#http-api)
-9. [记忆系统](#记忆系统)
-10. [Prompt 策略](#prompt-策略)
+5. [如何写自己的故事](#如何写自己的故事)
+6. [Python SDK](#python-sdk)
+7. [AI 驱动互动剧情](#ai-驱动互动剧情)
+8. [CLI 工具](#cli-工具)
+9. [TUI 管理面板](#tui-管理面板)
+10. [HTTP API](#http-api)
+11. [启动验证](#启动验证)
+12. [记忆系统](#记忆系统)
+13. [Prompt 策略](#prompt-策略)
 
 ---
 
@@ -270,6 +273,53 @@ fallback:
 
 ---
 
+## 如何写自己的故事
+
+引擎不绑定任何具体题材——所有剧情内容（世界观、NPC、锚点、保底文案）都活在 `stories/<故事名>/` 一个文件夹里，src/ 不需要改一行。
+
+### 完整参考
+
+`stories/seaside_town/` 是开箱即用的完整示例（克苏鲁海边小镇）：
+
+```
+stories/seaside_town/
+├── story.yaml          # 世界观 + 默认保底文案
+├── npcs.yaml           # NPC 定义（性格、情绪、预设记忆）
+└── chapters/
+    └── chapter_1.yaml  # 章节 + StoryBeat 锚点 + 章节级保底
+```
+
+打开这三个文件就能看到一个能跑的故事长什么样。**写自己的故事 = 复制这个目录结构 → 替换内容 → 不动 src/**。
+
+### 三个文件各装什么
+
+| 文件 | 装什么 | 引擎怎么用 |
+|------|--------|----------|
+| `story.yaml` | 故事标题、`default_world`（世界观）、`default_fallback`（LLM 失败时的保底文案池） | 加载时解析为 `StoryMeta`，注入 prompt 顶端的"世界观设定" |
+| `npcs.yaml` | NPC 列表（id / name / mood / traits / relationship / preset_memories） | 加载时实例化为 `NPCState`，写入引擎 `_npcs`；预设记忆灌入长期记忆 |
+| `chapters/*.yaml` | 章节标题、章节级 `world` 覆盖、`beats` 锚点列表、章节级 `fallback` 覆盖 | 切章节时替换 `BeatManager` 的 beats，覆盖 world_setting 和 fallback_pool |
+
+各字段语义和最小示例见上一节 [故事编写](#故事编写)，完整示例直接看 `stories/seaside_town/`。
+
+### 跑起来
+
+```bash
+# 终端交互
+python examples/interactive_demo.py stories/<your_story>
+
+# HTTP API
+narrative-engine serve --story stories/<your_story>
+
+# 作为库引入
+engine = NarrativeEngine.from_story("stories/<your_story>")
+```
+
+### 换题材时调整 prompt 模板
+
+默认 `.j2` 模板带轻微克苏鲁味（写在 `description.j2` 里："可以略带克苏鲁式的诡异感"）。换题材时按需用 `PromptTemplates` 覆盖，见后文 [自定义 prompt 模板](#自定义-prompt-模板)。**模板覆盖是"语气调整"——故事内容仍只在 `stories/` 里。**
+
+---
+
 ## Python SDK
 
 ### 初始化引擎
@@ -421,6 +471,141 @@ print(engine.beat_manager.fired)       # 已触发 beats
 
 ---
 
+## AI 驱动互动剧情
+
+引擎自身只生成**单回合**叙事内容；要把它接成**互动循环**，需要把玩家的选择反馈进 GameState，再调下一轮 `tell()`。这一节讲完整范式。
+
+### 闭环范式
+
+```
+┌────────────────────────────────────────────────────┐
+│  tell(kind="event")  →  Event(choices=[...])       │
+│         ↑                       │                  │
+│         │                       │ 玩家选了 "举起相机"│
+│         │                       ▼                  │
+│         │   apply_choice(state, event, choice)     │
+│         │                       │                  │
+│         │                       ▼                  │
+│         │   recent_actions += ["举起相机"]          │
+│         │   history += ["事件「...」：选择了「举起相机」"]│
+│         │                       │                  │
+│         └───────────────────────┘                  │
+│       下一轮 tell() 自动看到玩家最近行动             │
+└────────────────────────────────────────────────────┘
+```
+
+### `apply_choice()` 方法
+
+```python
+def apply_choice(self, state: GameState, event: Event, choice: str) -> GameState:
+    ...
+```
+
+| 参数 | 说明 |
+|------|------|
+| `state` | 当前 GameState（会被原地修改） |
+| `event` | 上一轮 `tell(kind="event")` 返回的 `Event` |
+| `choice` | 玩家选的字符串，必须在 `event.choices` 中 |
+
+返回被修改的 state（同一对象）。`choice` 不在 `event.choices` 中时抛 `ValueError`。
+
+引擎只把选择写入 `state.player.recent_actions` 和 `state.history`——**物品消耗、属性变化、解锁标志由游戏层处理**。这条边界让引擎对任何题材都通用。
+
+### 最小互动循环示例
+
+```python
+from narrative_engine import NarrativeEngine, GameState, PlayerState, WorldState
+
+engine = NarrativeEngine.from_story("stories/seaside_town")
+
+state = GameState(
+    player=PlayerState(name="悠悠", inventory=["相机"]),
+    world=WorldState(area="old_dock", time="夜晚"),
+)
+
+# 1. 引擎生成事件
+result = engine.tell(state, kind="event", context="深夜站在码头")
+event = result.event
+print(f"事件：{event.title}\n{event.description}")
+for i, c in enumerate(event.choices):
+    print(f"  {i+1}. {c}")
+
+# 2. 玩家选一个
+choice = event.choices[0]
+
+# 3. 把选择写回 state
+engine.apply_choice(state, event, choice)
+
+# 4. 游戏层自行处理后果（引擎不管）
+if "举起相机" in choice:
+    state.player.inventory.append("怪物的照片")  # 业务逻辑
+
+# 5. 下一轮 tell() — prompt 自动包含 recent_actions
+next_result = engine.tell(state, kind="description", context="拍完之后")
+print(next_result.description.text)
+```
+
+### 玩家视角注入到 prompt
+
+引擎在渲染 prompt 模板时，会把以下两个字段（如果非空）以醒目段落注入末尾：
+
+- `state.player.inventory: list[str]` — 当前持有物
+- `state.player.recent_actions: list[str]` — 最近行动（取最后 3 条）
+
+模板片段（出现在所有内置 `.j2` 中）：
+
+```jinja
+{% if state.player.inventory %}
+玩家持有：{{ state.player.inventory | join("、") }}
+{% endif %}
+{% if state.player.recent_actions %}
+最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
+{% endif %}
+```
+
+**为什么显式抽出来**：完整 `state_json` 嵌套很深，AI 容易忽略字段；提到末尾让模型感知更明确。
+
+**为什么用条件渲染**：纯对话游戏 / 视觉小说不一定需要 inventory 概念，留空时这两段不出现，不污染 prompt。
+
+**字段都是 `list[str]`**：作者可以放任意字符串——「相机」、「数据卡」、「断剑」、「黑曜石碎片」——引擎不关心内容含义。
+
+### 自定义 prompt 模板
+
+如果默认模板的"克苏鲁味"不符合你的题材（比如你写的是赛博朋克或武侠），可以通过 `PromptTemplates` 全量覆盖：
+
+```python
+from narrative_engine import NarrativeEngine, EngineConfig, PromptTemplates
+
+custom = PromptTemplates(
+    dialogue="""
+你是赛博朋克世界的 NPC：{{ npc.name if npc else "路人" }}。
+{% if npc %}性格：{{ npc.traits | join("、") }}。情绪：{{ npc.mood }}。{% endif %}
+
+世界观：{{ world_setting }}
+当前状态：{{ state_json }}
+
+{% if state.player.inventory %}
+玩家持有：{{ state.player.inventory | join("、") }}
+{% endif %}
+
+{{ context }}
+
+请生成一句 NPC 对话，要带街头黑话。返回 JSON：
+{"text": "...", "mood_change": 0, "unlock_hint": null}
+""",
+    event="...",          # 同样可覆盖 event 模板
+    description="...",    # 同样可覆盖 description 模板
+)
+
+engine = NarrativeEngine(EngineConfig(prompt_templates=custom))
+```
+
+`PromptTemplates`（`models/config.py:96`）的三个字段对应三种 `kind`，留空就回退到内置 `.j2`。变量集与内置一致：`world_setting / state / state_json / context / session_context / memory_context / npc`。
+
+完整可运行的互动 demo 见 `examples/interactive_demo.py`，支持 `talk`、`event`、`choose`、`pick`、`drop`、`inv` 等命令。
+
+---
+
 ## CLI 工具
 
 ```bash
@@ -492,12 +677,12 @@ narrative-engine serve --story stories/seaside_town --host 0.0.0.0 --port 8000
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/health` | GET | 健康检查，返回引擎状态 |
-| `/tell` | POST | 非流式叙事生成 |
-| `/tell/stream` | POST | SSE 流式叙事生成 |
-| `/story/info` | GET | 当前故事标题、章节、NPC 列表 |
+| `/health` | GET | 健康检查 |
+| `/tell` | POST | 叙事生成（非流式 / 流式由 body 中 `stream: true` 切换） |
+| `/story` | GET | 当前故事标题、章节、NPC 列表 |
+| `/story/load` | POST | 加载/切换到指定 story_dir |
 | `/story/chapters` | GET | 所有章节列表 |
-| `/story/chapter/{name}` | POST | 切换到指定章节 |
+| `/story/chapter/switch` | POST | 切换到指定章节（body: `{"chapter": "<name>"}`） |
 | `/story/npcs/reload` | POST | 从 npcs.yaml 热重载 NPC |
 
 ### 请求格式
@@ -506,24 +691,91 @@ narrative-engine serve --story stories/seaside_town --host 0.0.0.0 --port 8000
 POST /tell
 {
   "state": {
-    "player": {"name": "悠悠", "attributes": {"san": 72}},
-    "world": {"area": "old_dock", "time": "night"}
+    "player": {"name": "player", "attributes": {"hp": 100}},
+    "world": {"area": "marketplace", "time": "noon"}
   },
   "kind": "dialogue",
-  "context": "玩家钓上旧靴子",
-  "npc_id": "fishmonger_li"
+  "context": "玩家询价",
+  "npc_id": "trader",
+  "stream": false
 }
 ```
 
 ### 流式响应 (SSE)
 
+把请求体里的 `stream` 设成 `true` 即可：
+
 ```bash
-curl -N -X POST http://localhost:8000/tell/stream \
+curl -N -X POST http://localhost:8000/tell \
   -H "Content-Type: application/json" \
-  -d '{"state":{"world":{"area":"码头"}},"kind":"dialogue","context":"你好"}'
+  -d '{"state":{"world":{"area":"marketplace"}},"kind":"dialogue","context":"你好","stream":true}'
 ```
 
-事件类型：`partial`（流式片段）→ `result`（最终完整结果）→ `done`
+事件流：每个 `data:` 是一行 `partial` JSON，最后一条是 `[DONE]`。
+
+---
+
+## 启动验证
+
+`pytest` 通过不代表三个表面（CLI / HTTP / TUI）能正常起来——routes 装配、TUI screen mount、CLI 入口的 import 错误，单元测试都不一定能挡住。仓库里 `.claude/skills/run/` 提供了一个 driver，把三个表面都点一遍。
+
+### 一键跑
+
+```bash
+.claude/skills/run/driver.sh           # CLI + HTTP + TUI 全跑
+.claude/skills/run/driver.sh cli       # 只验 CLI
+.claude/skills/run/driver.sh http      # 只验 HTTP
+.claude/skills/run/driver.sh tui       # 只验 TUI（headless）
+```
+
+退出码非零代表至少一个表面挂了。
+
+### 各表面验证语义
+
+| 表面 | 验证内容 | 是否需要 LLM key |
+|------|---------|----------------|
+| CLI  | `narrative-engine` 无参运行，stdout 含版本号 | 否 |
+| HTTP | uvicorn 起来 → `GET /health` → `GET /story` → `POST /tell`（beat-anchored payload） | 否（默认走锚点） |
+| TUI  | `App.run_test()` 跑一次事件循环，5 个 screen 全部 mount 成功 | 否 |
+
+### 环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `STORY` | `stories/seaside_town` | 故事目录 |
+| `PORT`  | `18234` | HTTP 端口 |
+| `HOST`  | `127.0.0.1` | HTTP 监听地址 |
+| `NO_TELL` | `0` | 设 `1` 跳过 `/tell` 探测（用于非 seaside_town 故事，beat 锚点不会命中） |
+| `TELL_PAYLOAD_FILE` | — | 自定义 `/tell` payload 的 JSON 文件路径 |
+
+### `/tell` 探测细节
+
+driver 默认发的 payload：
+
+```json
+{"state":{"world":{"area":"grandma_house","chapter":"第一章"}},"kind":"description","context":""}
+```
+
+这份状态命中 `stories/seaside_town/chapters/chapter_1.yaml` 里的 `prologue_arrival` beat（`world.area: grandma_house` + `world.chapter: 第一章`），所以走 StoryBeat 锚点直接返回手写文案，**不需要 LLM key**。
+
+失败判定：
+
+- `kind` 不是 `description` → payload 编码挂了（多半是 locale 问题，driver 已经用 heredoc 写文件 + `curl -d @file` 规避了 `env -i` 下的 UTF-8 字面量被打成 `?`）
+- `degraded:true` → 锚点没命中，引擎降级到 LLM，但又没 API key → 报错并提示设 `NARRATIVE_API_KEY` 或 `NO_TELL=1`
+
+换故事时，要么 `NO_TELL=1` 跳过 `/tell`，要么用 `TELL_PAYLOAD_FILE` 指向一份能命中你自己 chapter 1 锚点的 payload。
+
+### 失败排查
+
+| 症状 | 多半是 |
+|------|--------|
+| `.venv not found` | 还没装环境，先 `pip install -e ".[api,tui,dev]"` |
+| `需要安装 API 依赖` | 装的是基础 extras，补 `[api]` |
+| `/health` 15s 超时 | 端口被占 / 别的 uvicorn 没退干净 → `lsof -i:18234` |
+| TUI smoke 抛 `ImportError: textual` | 缺 `[tui]` extras |
+| TUI smoke 抛 `compose()` 异常 | 改坏了某个 screen，看 traceback 定位 `src/narrative_engine/tui/screens/*.py` |
+
+详细文档见 `.claude/skills/run/SKILL.md`。
 
 ---
 
