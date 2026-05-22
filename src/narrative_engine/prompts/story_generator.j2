@@ -1,0 +1,36 @@
+你是一名总编剧。请根据下面的"故事灵感"创作一个完整的互动叙事故事，让玩家可以立即开始游玩。
+
+## 故事灵感
+
+{{ idea }}
+
+## 创作要求
+
+1. **世界观**：写一段 setting（4-8 句），定下舞台、规则、核心冲突；选一个 tone（neutral / peaceful / eerie / tense / dread / hopeful 等）；era 字段写时代背景。
+2. **NPC**：创作 {{ num_npcs }} 个 NPC。每个 NPC 给 snake_case 的 id、显示名 name、3-5 条 traits（性格/身份特征）、初始 mood、relationship（与玩家亲密度，-10~10）。可选地给 1-2 条 preset_memories（{content, importance: 0-10}）。
+3. **章节**：写 1 个章节，含 {{ num_beats }} 个 StoryBeat 锚点。混合使用三种 kind：
+   - `description`（场景氛围描述）
+   - `dialogue`（NPC 对话）
+   - `event`（事件 + 选择 + 后果）
+4. **StoryBeat 触发器（trigger 字段）**：每个锚点都要给出可命中的 trigger，从下面任选一种或组合：
+   - `{"world.area": "<area_name>"}` — 玩家进入指定区域时触发
+   - `{"world.area": "<area>", "_npc_id": "<npc_id>"}` — 在某区域和某 NPC 交互时触发
+   - `{"_npc_id": "<npc_id>"}` — 特定 NPC 交互时触发
+   - `{"player.attributes.<key>": "<=N"}` 或 `">=N"` — 属性比较
+   - `{"$or": [{...}, {...}]}` — 多条件之一满足
+5. **event 锚点要求**：
+   - `event_title`（≤20 字）+ `text`（事件描述，≤100 字）
+   - `event_choices`：2-3 个玩家可选行动
+   - `event_consequences`：每个选项一句话后果描述（dict，key 是 choice 字符串）
+6. **保底文案**：dialogue / event / description 三池各给 3 条，作为 LLM 失败时的降级文本。
+7. **id 全用 snake_case**（英文小写 + 下划线），不要中文 id。
+8. **章节 world_setting**：可以在故事级 setting 基础上做章节聚焦（"第一章发生在 X 区域"）。
+
+## 重要约束
+
+- 所有 trigger 中引用的 npc_id 必须是你创作的 NPC 列表中存在的 id
+- 至少有 1 个锚点的 trigger 不依赖玩家属性，确保游戏开局就能命中
+- 不要使用真实人名或现实政治敏感词
+- 严格按照 JSON schema 输出，不要省略必填字段
+
+请输出符合 GeneratedStory schema 的 JSON。

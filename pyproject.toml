@@ -42,3 +42,7 @@ packages = ["src/narrative_engine"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "integration: 需要真实 LLM API（设 NARRATIVE_API_KEY 后用 pytest -m integration 触发）",
+]
+addopts = "-m 'not integration'"

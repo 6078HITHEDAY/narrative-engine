@@ -1,9 +1,10 @@
 """命令行入口。
 
 用法:
-    narrative-engine dialogue --area "旧码头" --npc "鱼贩老李" --context "玩家钓上一只旧靴子"
-    narrative-engine event --area "海边" --context "玩家捡到一个漂流瓶"
-    narrative-engine describe --area "废弃灯塔" --context "玩家站在灯塔前"
+    narrative-engine dialogue --area "<area>" --npc "<npc_id>" --context "<情境>"
+    narrative-engine event --area "<area>" --context "<情境>"
+    narrative-engine describe --area "<area>" --context "<情境>"
+    narrative-engine generate --idea "<故事灵感>" --out stories/<名字>
     narrative-engine shell   # 交互式 shell
 """
 
@@ -15,15 +16,16 @@ import sys
 
 def main() -> None:
     print("narrative-engine v0.1.0")
-    print("用法: narrative-engine [dialogue|event|describe|shell|serve|tui] [选项]")
+    print("用法: narrative-engine [dialogue|event|describe|generate|shell|serve|tui] [选项]")
     print()
 
     if len(sys.argv) < 2:
         print("示例:")
-        print('  narrative-engine dialogue --area "旧码头" --npc "鱼贩老李" --context "钓上旧靴子"')
-        print('  narrative-engine event --area "海边" --context "捡到漂流瓶"')
+        print('  narrative-engine dialogue --area "<area>" --npc "<npc_id>" --context "<情境>"')
+        print('  narrative-engine event --area "<area>" --context "<情境>"')
+        print('  narrative-engine generate --idea "<故事灵感>" --out stories/<名字>')
         print('  narrative-engine shell')
-        print('  narrative-engine serve --port 8000 --story stories/seaside_town')
+        print('  narrative-engine serve --port 8000 --story stories/<故事名>')
         print('  narrative-engine tui')
         return
 
@@ -37,10 +39,61 @@ def main() -> None:
     elif cmd == "tui":
         _tui()
     elif cmd in ("dialogue", "event", "describe"):
-        _run_generation(cmd, kwargs)
+        kind = "description" if cmd == "describe" else cmd
+        _run_generation(kind, kwargs)
+    elif cmd == "generate":
+        _generate_story(kwargs)
     else:
         print(f"未知命令: {cmd}")
         sys.exit(1)
+
+
+def _generate_story(kwargs: dict) -> None:
+    """AI 总编剧：根据灵感一次性生成 stories/<name>/ 目录。"""
+    from narrative_engine.generators import StoryGenerator
+
+    idea = kwargs.get("idea")
+    if not idea or idea is True:
+        try:
+            idea = input("故事灵感: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+    if not idea:
+        print("缺少 --idea")
+        sys.exit(1)
+
+    out = kwargs.get("out")
+    if not out or out is True:
+        out = f"stories/{_slugify(idea)}"
+
+    overwrite = bool(kwargs.get("overwrite", False))
+    num_npcs = int(kwargs.get("npcs", 3))
+    num_beats = int(kwargs.get("beats", 5))
+
+    print(f"灵感: {idea}")
+    print(f"输出: {out}")
+    print(f"NPC 数: {num_npcs} / Beat 数: {num_beats}")
+    print("调用 LLM 生成故事...")
+
+    gen = StoryGenerator()
+    try:
+        path = gen.generate(idea, out, num_npcs=num_npcs, num_beats=num_beats, overwrite=overwrite)
+    except FileExistsError as e:
+        print(f"错误: {e}")
+        sys.exit(1)
+
+    print(f"\n故事已生成: {path}")
+    print(f"运行: narrative-engine serve --story {path}")
+    print(f"或互动: python examples/interactive_demo.py {path}")
+
+
+def _slugify(text: str) -> str:
+    """中文/标点转 snake_case 目录名。"""
+    import re
+    s = re.sub(r"[^\w一-鿿]+", "_", text.strip())
+    s = re.sub(r"_+", "_", s).strip("_").lower()
+    return s[:50] or "untitled_story"
 
 
 def _serve(kwargs: dict) -> None:
@@ -130,7 +183,8 @@ def _run_generation(kind: str, kwargs: dict) -> None:
 
 def _interactive() -> None:
     print("交互模式 (输入 quit 退出)")
-    print("示例输入: dialogue 旧码头 鱼贩老李 钓上旧靴子")
+    print("格式: <kind> <area> <npc_id> <context>")
+    print("示例: dialogue <area> <npc_id> <context>")
     print()
 
     import os
