@@ -65,12 +65,10 @@ class MemoryViewerScreen(Screen):
         state = get_state()
         lst = self.query_one("#mem_npc_list", ListView)
         lst.clear()
-        if state.engine:
-            for npc_id in sorted(state.engine.npcs):
-                npc = state.engine.npcs[npc_id]
-                lst.append(ListItem(Label(f"  {npc.name} ({npc.id})")))
-        # 无 NPC 时也显示一个"全部"选项
-        if state.engine and state.engine.memory:
+        for npc_id in sorted(state.engine.npcs):
+            npc = state.engine.npcs[npc_id]
+            lst.append(ListItem(Label(f"  {npc.name} ({npc.id})")))
+        if state.engine.memory:
             lst.append(ListItem(Label("  [全部记忆]")))
 
     def _get_selected_npc_id(self) -> str | None:
@@ -88,7 +86,7 @@ class MemoryViewerScreen(Screen):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         state = get_state()
-        if not state.engine or not state.engine.memory:
+        if not state.engine.memory:
             return
 
         npc_id = self._get_selected_npc_id()
@@ -145,14 +143,14 @@ class MemoryViewerScreen(Screen):
 
     def _clear_memories(self) -> None:
         state = get_state()
-        if state.engine and state.engine.memory:
+        if state.engine.memory:
             state.engine.memory.clear()
             self.query_one("#long_term_display", Static).update("[green]记忆已清空[/]")
             self.query_one("#session_display", Static).update("[green]会话历史已清空[/]")
 
     def _export_memories(self) -> None:
         state = get_state()
-        if not state.engine or not state.engine.memory:
+        if not state.engine.memory:
             return
 
         mem = state.engine.memory

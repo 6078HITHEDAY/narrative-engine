@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 from pathlib import Path
+
+import narrative_engine.settings  # noqa: F401  # 触发 .env 自动加载
 
 from narrative_engine.core.beat_manager import BeatManager
 from narrative_engine.core.cache import CacheManager
@@ -24,6 +27,8 @@ _OUTPUT_SCHEMAS = {
     "event": Event,
     "description": Description,
 }
+
+logger = logging.getLogger(__name__)
 
 
 class NarrativeEngine:
@@ -48,6 +53,12 @@ class NarrativeEngine:
         self._npcs: dict[str, NPCState] = {}
         if self._runtime:
             self._npcs = dict(self._runtime.npcs)
+
+        # 所有路径统一回退到环境变量（必须在创建 AIDirector 之前执行，否则 director 持有空 api_key）
+        if not self._config.backend.api_key:
+            env_backend = self._backend_from_env()
+            if env_backend:
+                self._config.backend = env_backend
 
         self._director = AIDirector(self._config.backend)
         self._context_mgr = ContextManager(
@@ -92,6 +103,40 @@ class NarrativeEngine:
         engine = cls(backend=backend) if backend else cls()
         engine.load_story(story_dir, chapter=chapter)
         return engine
+
+    @staticmethod
+    def _backend_from_env() -> LLMBackend | None:
+        import os
+        api_key = os.environ.get("NARRATIVE_API_KEY", "")
+        if not api_key:
+            return None
+        from narrative_engine.models.config import ProviderKind
+        backend_raw = os.environ.get("NARRATIVE_BACKEND", "openai")
+        try:
+            provider = ProviderKind(backend_raw)
+        except ValueError:
+            valid = ", ".join(p.value for p in ProviderKind)
+            logger.warning(
+                "Unknown NARRATIVE_BACKEND=%r, falling back to 'openai' (valid: %s)",
+                backend_raw, valid,
+            )
+            provider = ProviderKind.openai
+        kwargs: dict = dict(
+            provider=provider,
+            api_key=api_key,
+            api_base=os.environ.get("NARRATIVE_API_BASE", ""),
+            model=os.environ.get("NARRATIVE_MODEL", ""),
+        )
+        mode = os.environ.get("NARRATIVE_STRUCTURED_OUTPUT_MODE", "")
+        if mode:
+            kwargs["structured_output_mode"] = mode
+        reasoning = os.environ.get("NARRATIVE_REASONING_MODEL", "")
+        if reasoning:
+            kwargs["reasoning_model"] = reasoning.lower() in ("1", "true", "yes")
+        reasoning_max = os.environ.get("NARRATIVE_REASONING_MAX_TOKENS", "")
+        if reasoning_max:
+            kwargs["reasoning_max_tokens"] = int(reasoning_max)
+        return LLMBackend(**kwargs)
 
     @staticmethod
     def _load_engine_backend(config_dir: str) -> LLMBackend | None:
@@ -168,6 +213,13 @@ class NarrativeEngine:
         self._beat_manager._state_path = Path(self._config.state_path)
         self._beat_manager.load()
 
+        fired = self._beat_manager.fired
+        if fired:
+            logger.info(
+                "Loaded %d previously fired beat(s): %s. Call reset_beats() to start fresh.",
+                len(fired), sorted(fired),
+            )
+
         if self._memory:
             self._memory._path = Path(self._config.memory_path)
             self._memory.load()
@@ -225,6 +277,15 @@ class NarrativeEngine:
     def load_state(self, path: str | None = None) -> None:
         self._beat_manager.load(path)
 
+    def reset_beats(self) -> None:
+        """清空 beat fired 集合，让所有 StoryBeat 锚点重新可触发。"""
+        self._beat_manager.reset()
+
+    def clear_memory(self) -> None:
+        """清空记忆与历史 turn。"""
+        if self._memory:
+            self._memory.clear()
+
     def tell(
         self,
         state: GameState | dict,
@@ -242,6 +303,8 @@ class NarrativeEngine:
         """
         if isinstance(state, dict):
             state = GameState(**state)
+
+        self._validate(state, kind, npc_id)
 
         # ---- NPC 自动补全 ----
         if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
@@ -285,11 +348,12 @@ class NarrativeEngine:
             result, raw, tokens = self._director.generate(
                 prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
             )
-        except Exception:
-            return self._fallback(kind, npc_id, context)
+        except Exception as e:
+            return self._fallback(kind, npc_id, context, error=e)
 
         text = self._extract_text(result)
         if self._filter and text and not self._filter.validate(text):
+            logger.warning("Keyword filter blocked output for kind=%s npc=%s", kind, npc_id)
             return self._fallback(kind, npc_id, context)
 
         if self._cache:
@@ -318,6 +382,8 @@ class NarrativeEngine:
         """异步版 tell()。与同步版相同的四级流水线。"""
         if isinstance(state, dict):
             state = GameState(**state)
+
+        self._validate(state, kind, npc_id)
 
         if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
             state.npcs[npc_id] = self._npcs[npc_id]
@@ -357,11 +423,12 @@ class NarrativeEngine:
             result, raw, tokens = await self._director.generate_async(
                 prompt, schema, kind=kind, npc_mood=npc.mood if npc else "",
             )
-        except Exception:
-            return self._fallback(kind, npc_id, context)
+        except Exception as e:
+            return self._fallback(kind, npc_id, context, error=e)
 
         text = self._extract_text(result)
         if self._filter and text and not self._filter.validate(text):
+            logger.warning("Keyword filter blocked async output for kind=%s npc=%s", kind, npc_id)
             return self._fallback(kind, npc_id, context)
 
         if self._cache:
@@ -390,6 +457,8 @@ class NarrativeEngine:
         """流式叙事生成。锚点命中立即 yield 完整结果，否则 yield 部分模型。"""
         if isinstance(state, dict):
             state = GameState(**state)
+
+        self._validate(state, kind, npc_id)
 
         if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
             state.npcs[npc_id] = self._npcs[npc_id]
@@ -427,8 +496,8 @@ class NarrativeEngine:
                     d = getattr(partial, "description", "")
                     if d:
                         final_text = d
-        except Exception:
-            yield self._fallback(kind, npc_id, context)
+        except Exception as e:
+            yield self._fallback(kind, npc_id, context, error=e)
             return
 
         self._record_turn(npc_id, context, final_text, kind)
@@ -443,6 +512,8 @@ class NarrativeEngine:
         """异步流式叙事生成。"""
         if isinstance(state, dict):
             state = GameState(**state)
+
+        self._validate(state, kind, npc_id)
 
         if npc_id and npc_id not in state.npcs and npc_id in self._npcs:
             state.npcs[npc_id] = self._npcs[npc_id]
@@ -477,8 +548,8 @@ class NarrativeEngine:
                     d = getattr(partial, "description", "")
                     if d:
                         final_text = d
-        except Exception:
-            yield self._fallback(kind, npc_id, context)
+        except Exception as e:
+            yield self._fallback(kind, npc_id, context, error=e)
             return
 
         self._record_turn(npc_id, context, final_text, kind)
@@ -513,19 +584,43 @@ class NarrativeEngine:
             return result.text
         return ""
 
-    def _fallback(self, kind: str, npc_id: str = "", context: str = "") -> NarrativeOutput:
+    def _validate(self, state: GameState, kind: str, npc_id: str = "") -> None:
+        import warnings
+
+        if kind not in ("dialogue", "event", "description"):
+            raise ValueError(f"不支持的叙事类型: {kind!r}，可选 dialogue / event / description")
+
+        if npc_id and self._npcs and npc_id not in self._npcs:
+            known = ", ".join(sorted(self._npcs.keys())[:10])
+            warnings.warn(
+                f"NPC {npc_id!r} 不在已加载的 NPC 列表中: [{known}]",
+                stacklevel=2,
+            )
+        elif npc_id and not self._npcs:
+            warnings.warn(
+                f"npc_id={npc_id!r} 已提供，但引擎未加载任何 NPC",
+                stacklevel=2,
+            )
+
+        if not state.world.area:
+            warnings.warn("world.area 为空，可能影响 StoryBeat 锚点匹配和 prompt 质量", stacklevel=2)
+
+    def _fallback(self, kind: str, npc_id: str = "", context: str = "", error: Exception | None = None) -> NarrativeOutput:
         pool = self._config.fallback_pool.get(kind, [])
         if not pool:
             pool = ["……", "（沉默）", "风吹过，没有人说话。"]
 
         text = random.choice(pool)
+        err_msg = str(error) if error else ""
+
+        logger.warning("Fallback triggered for kind=%s npc=%s: %s", kind, npc_id, err_msg or "no error detail")
 
         if kind == "dialogue":
-            result = NarrativeOutput(kind=kind, dialogue=Dialogue(text=text), cached=False, backend="fallback")
+            result = NarrativeOutput(kind=kind, dialogue=Dialogue(text=text), cached=False, degraded=True, backend="fallback", error=err_msg)
         elif kind == "event":
-            result = NarrativeOutput(kind=kind, event=Event(title="微小的动静", description=text), cached=False, backend="fallback")
+            result = NarrativeOutput(kind=kind, event=Event(title="微小的动静", description=text), cached=False, degraded=True, backend="fallback", error=err_msg)
         else:
-            result = NarrativeOutput(kind=kind, description=Description(text=text), cached=False, backend="fallback")
+            result = NarrativeOutput(kind=kind, description=Description(text=text), cached=False, degraded=True, backend="fallback", error=err_msg)
 
-        self._record_turn(npc_id, context, text, kind)
+        # 降级文案不写入记忆，避免污染后续 AI 调用的上下文
         return result

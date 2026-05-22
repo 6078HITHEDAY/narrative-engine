@@ -117,5 +117,7 @@ class NarrativeOutput(BaseModel):
     description: Description | None = None
     tokens_used: int = 0
     cached: bool = False
+    degraded: bool = False
     backend: str = ""
     raw: str = ""
+    error: str = ""

@@ -140,7 +140,7 @@ class NPCEditorScreen(Screen):
         npc_id = self._get_selected_npc_id()
         if npc_id:
             state = get_state()
-            if state.engine and npc_id in state.engine.npcs:
+            if npc_id in state.engine.npcs:
                 self._load_npc_to_form(state.engine.npcs[npc_id])
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -157,9 +157,6 @@ class NPCEditorScreen(Screen):
 
     def _add_npc(self) -> None:
         state = get_state()
-        if not state.engine:
-            self.query_one("#npc-status", Static).update("[red]请先加载故事[/]")
-            return
         data = self._read_form()
         if not data["id"]:
             self.query_one("#npc-status", Static).update("[red]NPC ID 不能为空[/]")
@@ -175,16 +172,13 @@ class NPCEditorScreen(Screen):
         if not npc_id:
             return
         state = get_state()
-        if state.engine and npc_id in state.engine._npcs:
+        if npc_id in state.engine._npcs:
             del state.engine._npcs[npc_id]
             self._refresh_list()
             self.query_one("#npc-status", Static).update(f"[green]NPC '{npc_id}' 已删除（需写入文件持久化）[/]")
 
     def _save_npc(self) -> None:
         state = get_state()
-        if not state.engine:
-            self.query_one("#npc-status", Static).update("[red]请先加载故事[/]")
-            return
         data = self._read_form()
         if not data["id"]:
             self.query_one("#npc-status", Static).update("[red]NPC ID 不能为空[/]")
@@ -196,7 +190,7 @@ class NPCEditorScreen(Screen):
 
     def _write_to_file(self) -> None:
         state = get_state()
-        if not state.engine or not state.current_story:
+        if not state.current_story:
             self.query_one("#npc-status", Static).update("[red]请先加载故事[/]")
             return
 

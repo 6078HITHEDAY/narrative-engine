@@ -155,6 +155,7 @@ class APIConfigScreen(Screen):
     @work(thread=False)
     async def _test_connection(self) -> None:
         import litellm
+        from narrative_engine import LLMBackend, ProviderKind
 
         config = self._read_form()
         status = self.query_one("#api-status", Static)
@@ -166,8 +167,6 @@ class APIConfigScreen(Screen):
         status.update("[yellow]正在测试连接...[/]")
 
         try:
-            from narrative_engine import NarrativeEngine, LLMBackend, ProviderKind, EngineConfig
-
             backend = LLMBackend(
                 provider=ProviderKind(config["provider"]),
                 api_key=config["api_key"],
@@ -175,8 +174,6 @@ class APIConfigScreen(Screen):
                 model=config["model"] or "",
                 temperature=config["temperature"],
             )
-
-            # 发出真实 API 请求验证连接
             model = backend.resolve_model()
             kwargs: dict = dict(
                 model=model,
@@ -192,16 +189,7 @@ class APIConfigScreen(Screen):
             response = await litellm.acompletion(**kwargs)
             actual_model = getattr(response, "model", model)
             content = response.choices[0].message.content if response.choices else ""
-
-            engine = NarrativeEngine(EngineConfig(backend=backend, cache_enabled=False))
-            state = get_state()
-            state.engine = engine
-            state.api_config = config
-
             status.update(f"[green]连接成功！model={actual_model} response=\"{content.strip()}\"[/]")
-            self._update_status_line()
-            if hasattr(self.app, "update_status"):
-                self.app.update_status()
         except Exception as e:
             status.update(f"[red]连接失败: {e}[/]")
 
@@ -209,13 +197,14 @@ class APIConfigScreen(Screen):
         config = self._read_form()
         state = get_state()
         state.api_config = config
+        state.rebuild_engine()
 
         status = self.query_one("#api-status", Static)
         if state.storage_mode == "file":
             save_to_file(config)
-            status.update("[green]配置已保存到本地文件 (~/.narrative_engine/config.json)[/]")
+            status.update("[green]配置已保存到本地文件，引擎已应用新配置[/]")
         else:
-            status.update("[green]配置已保存到内存（退出后清空）[/]")
+            status.update("[green]配置已保存到内存，引擎已应用新配置[/]")
 
         self._update_status_line()
         if hasattr(self.app, "update_status"):

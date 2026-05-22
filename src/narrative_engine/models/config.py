@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -44,9 +45,12 @@ class LLMBackend(BaseModel):
     api_key: str = ""
     api_base: str | None = None
     temperature: float = Field(default=0.8, ge=0.0, le=2.0)
-    max_tokens: int = 256
-    timeout: float = 10.0
+    max_tokens: int = 512
+    timeout: float = 30.0
     temperature_profile: TemperatureProfile = Field(default_factory=TemperatureProfile)
+    structured_output_mode: Literal["auto", "tools", "json"] = "auto"
+    reasoning_model: bool = False
+    reasoning_max_tokens: int = 2048
 
     def resolve_model(self) -> str:
         if self.model:

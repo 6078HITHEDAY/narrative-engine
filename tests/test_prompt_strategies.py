@@ -6,6 +6,7 @@ import pytest
 
 from narrative_engine import (
     NarrativeEngine,
+    DirectorError,
     EngineConfig,
     LLMBackend,
     ProviderKind,
@@ -194,8 +195,11 @@ def test_retry_exhausted_raises():
         raise ConnectionError("持续中断")
 
     with patch.object(director._client, "create_with_completion", side_effect=always_fail):
-        with pytest.raises(ConnectionError):
+        with pytest.raises(DirectorError) as exc_info:
             director.generate("test prompt", Dialogue)
+        assert "持续中断" in str(exc_info.value)
+        assert exc_info.value.model == "openai/gpt-test"
+        assert exc_info.value.provider == "openai"
 
 
 def test_retry_triggers_fallback_in_engine():

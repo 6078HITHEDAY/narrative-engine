@@ -74,7 +74,7 @@ class PlaygroundScreen(Screen):
             self.query_one("#play-output", StreamingOutput).clear()
         elif event.button.id == "new_session_btn":
             state = get_state()
-            if state.engine and state.engine.memory:
+            if state.engine.memory:
                 state.engine.memory.new_session()
             state.session_history.clear()
             self.query_one("#history-log", RichLog).clear()
@@ -83,8 +83,8 @@ class PlaygroundScreen(Screen):
     @work(thread=False)
     async def _do_generate(self) -> None:
         state = get_state()
-        if not state.engine:
-            self.query_one("#gen-status", Static).update("[red]请先在 API 配置页完成设置[/]")
+        if not state.api_ready:
+            self.query_one("#gen-status", Static).update("[red]请先在 API 配置页填入 API Key[/]")
             return
 
         area = self.query_one("#area", Input).value
@@ -106,6 +106,8 @@ class PlaygroundScreen(Screen):
         if stream:
             status.update("[yellow]流式生成中...[/]")
             output.clear()
+            last_partial = None
+            last_len = 0
             try:
                 async for partial in state.engine.tell_stream_async(
                     game_state, kind=kind, context=context, npc_id=npc_id,
@@ -113,16 +115,26 @@ class PlaygroundScreen(Screen):
                     if isinstance(partial, NarrativeOutput):
                         output.show_result(partial.model_dump())
                         status.update(f"[green]完成 | backend={partial.backend}[/]")
-                        history.write(f"  {partial.dialogue.text if partial.dialogue else ''}")
-                        state.session_history.append({"context": context, "response": str(partial.model_dump())})
+                        text = partial.dialogue.text if partial.dialogue else (
+                            partial.description.text if partial.description else (
+                                partial.event.title if partial.event else ""))
+                        history.write(f"  {text}")
+                        state.session_history.append({"context": context, "response": text})
                         return
-                    t = getattr(partial, "text", "")
-                    if t:
-                        output.append_text(t)
+                    last_partial = partial
+                    t = getattr(partial, "text", "") or getattr(partial, "description", "") or ""
+                    if isinstance(t, str) and len(t) > last_len:
+                        output.append_text(t[last_len:])
+                        last_len = len(t)
             except Exception as e:
                 status.update(f"[red]错误: {e}[/]")
-            else:
-                status.update("[green]完成[/]")
+                return
+
+            if last_partial is not None:
+                final_text = getattr(last_partial, "text", "") or getattr(last_partial, "description", "") or getattr(last_partial, "title", "")
+                history.write(f"  {final_text}")
+                state.session_history.append({"context": context, "response": final_text})
+            status.update("[green]完成[/]")
         else:
             status.update("[yellow]生成中...[/]")
             output.clear()

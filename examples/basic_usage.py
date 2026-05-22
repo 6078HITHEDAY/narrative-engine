@@ -7,14 +7,18 @@
 
 from pathlib import Path
 
+import narrative_engine
 from narrative_engine import NarrativeEngine, GameState, PlayerState, WorldState
 
 
 def main() -> None:
+    narrative_engine.enable_logging()
+
     story_dir = Path(__file__).resolve().parent.parent / "stories" / "seaside_town"
 
     # ---- 一行启动：加载故事 ----
     engine = NarrativeEngine.from_story(str(story_dir))
+    engine.reset_beats()
 
     print(f"故事: {engine.story_title}")
     print(f"当前章节: {engine.current_chapter}")
@@ -35,6 +39,8 @@ def main() -> None:
     result = engine.tell(state, kind="description", context="第一次站在老房子前")
     print(f"  描述: {result.description.text if result.description else 'N/A'}")
     print(f"  后端: {result.backend}")
+    if result.error:
+        print(f"  原因: {result.error}")
     print()
 
     # ---- 场景二：NPC 对话（自动从 npcs.yaml 补全 NPC 信息） ----
@@ -52,6 +58,8 @@ def main() -> None:
     print(f"  对话: {result2.dialogue.text if result2.dialogue else 'N/A'}")
     print(f"  线索: {result2.dialogue.unlock_hint if result2.dialogue else 'N/A'}")
     print(f"  后端: {result2.backend}")
+    if result2.error:
+        print(f"  原因: {result2.error}")
     print()
 
     # ---- 场景三：OR + 正则 + 比较 ----
@@ -67,11 +75,13 @@ def main() -> None:
     if result3.event:
         print(f"  标题: {result3.event.title}")
         print(f"  后端: {result3.backend}")
+    if result3.error:
+        print(f"  原因: {result3.error}")
     print()
 
     # ---- 场景四：无锚点命中 → AI / fallback ----
     print("=" * 60)
-    print("场景四：普通闲聊 → 无锚点，走 fallback")
+    print("场景四：普通闲聊 → 无锚点，走 AI 生成或 fallback")
     print("=" * 60)
 
     state4 = GameState(
@@ -82,6 +92,8 @@ def main() -> None:
                           context="问今天有什么新鲜面包")
     print(f"  对话: {result4.dialogue.text if result4.dialogue else 'N/A'}")
     print(f"  后端: {result4.backend}")
+    if result4.error:
+        print(f"  原因: {result4.error}")
     print()
 
     # ---- 状态 ----

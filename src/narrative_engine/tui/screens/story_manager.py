@@ -46,13 +46,7 @@ class StoryManagerScreen(Screen):
     @work(thread=False)
     async def _load_story(self, path: str) -> None:
         state = get_state()
-        if not state.engine:
-            info = self.query_one("#story-info", Static)
-            info.update("[red]请先在 API 配置页完成设置[/]")
-            return
-
         try:
-            from narrative_engine import NarrativeEngine
             await state.engine.load_story_async(path)
             state.current_story = path
             self._refresh_info()
@@ -146,8 +140,6 @@ class StoryManagerScreen(Screen):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         state = get_state()
-        if not state.engine:
-            return
         item = event.item
         if item and hasattr(item, "get_child"):
             label = item.get_child(Label)
