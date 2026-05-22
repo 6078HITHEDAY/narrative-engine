@@ -25,7 +25,7 @@ beats:
     kind: event
     priority: 50
     trigger:
-      _photos_count: ">=12"
+      player.attributes.photos: ">=12"
     event_title: 照片里的眼睛眨了眨
     text: "你翻看相册，突然发现某张照片里——鱼摊老板对你眨了眨眼。但照片是静止的。相机背面多了一行你从未见过的刻度，那是「冲印」功能的标记。"
     event_choices:

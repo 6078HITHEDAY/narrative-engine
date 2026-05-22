@@ -132,12 +132,10 @@ class BeatManager:
     def _resolve(self, state: GameState, key: str, npc_id: str = "") -> Any:
         """解析触发键。支持:
         - 普通路径: "player.attributes.san", "world.area"
-        - _ 前缀虚拟字段: "_inventory_count", "_photos_count", "_npc_id"
+        - _ 前缀虚拟字段: "_inventory_count", "_history_count", "_npc_count", "_npc_id"
         """
-        # 虚拟字段
         virtual: dict[str, Any] = {
             "_inventory_count": len(state.player.inventory),
-            "_photos_count": len(state.player.recent_actions),
             "_history_count": len(state.history),
             "_npc_count": len(state.npcs),
             "_npc_id": npc_id,

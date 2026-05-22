@@ -241,18 +241,6 @@ def test_virtual_inventory_count():
     assert mgr.check(make_state(player={"inventory": []})) is None
 
 
-def test_virtual_photos_count():
-    mgr = BeatManager()
-    beat = StoryBeat(id="v2", trigger={"_photos_count": ">=5"})
-    mgr.register(beat)
-
-    state = make_state(player={"recent_actions": ["a"] * 5})
-    assert mgr.check(state) == beat
-
-    state2 = make_state(player={"recent_actions": ["a"] * 3})
-    assert mgr.check(state2) is None
-
-
 def test_virtual_npc_count():
     mgr = BeatManager()
     beat = StoryBeat(id="v3", trigger={"_npc_count": ">=2"})

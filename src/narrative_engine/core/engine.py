@@ -286,6 +286,31 @@ class NarrativeEngine:
         if self._memory:
             self._memory.clear()
 
+    def apply_choice(self, state: GameState, event: Event, choice: str) -> GameState:
+        """玩家在 event.choices 里选了一项，把选择写入 state 推进剧情。
+
+        引擎只把选择记入 recent_actions 和 history，让下一轮 prompt 能感知。
+        物品消耗、属性变化、解锁标志等业务后果由游戏层根据 event.consequences
+        自行处理——这条边界保证引擎对任何题材都通用。
+
+        Args:
+            state: 当前 GameState（会被原地修改）
+            event: 上一轮 tell(kind="event") 返回的 Event
+            choice: 玩家选的字符串，必须在 event.choices 中
+
+        Returns:
+            被修改的同一个 state 对象。
+        """
+        if choice not in event.choices:
+            raise ValueError(f"无效选项: {choice!r}，可选 {event.choices}")
+        state.player.recent_actions.append(choice)
+        consequence = event.consequences.get(choice, "")
+        line = f"事件「{event.title}」：选择了「{choice}」"
+        if consequence:
+            line += f" → {consequence}"
+        state.history.append(line)
+        return state
+
     def tell(
         self,
         state: GameState | dict,

@@ -17,9 +17,16 @@
 
 请生成一个支线事件。事件要求：
 - 标题有悬念感，不超过 20 字
-- 描述诡异但克制，不超过 100 字
+- 描述符合上述世界观氛围，不超过 100 字
 - 给出 2-3 个玩家可选行动
 - 每个行动有对应的后果简述
+
+{% if state.player.inventory %}
+玩家持有：{{ state.player.inventory | join("、") }}
+{% endif %}
+{% if state.player.recent_actions %}
+最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
+{% endif %}
 
 情境：{{ context }}
 

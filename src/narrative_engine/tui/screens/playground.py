@@ -45,12 +45,12 @@ class PlaygroundScreen(Screen):
             yield Label("[bold]交互测试 — 输入参数[/]")
             with Horizontal(classes="row"):
                 yield Label("Area: ", classes="inline")
-                yield Input(placeholder="旧码头", id="area")
+                yield Input(placeholder="<area>", id="area")
                 yield Label("NPC ID: ", classes="inline")
-                yield Input(placeholder="fishmonger_li", id="npc_id")
+                yield Input(placeholder="<npc_id>", id="npc_id")
             with Horizontal(classes="row"):
                 yield Label("Context: ", classes="inline")
-                yield Input(placeholder="玩家钓上一只旧靴子", id="context")
+                yield Input(placeholder="<情境描述>", id="context")
             with Horizontal(classes="row"):
                 yield Label("Kind: ")
                 yield Select(

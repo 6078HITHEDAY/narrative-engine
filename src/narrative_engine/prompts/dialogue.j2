@@ -22,9 +22,15 @@
 
 请生成一段 NPC 对话。对话要求：
 - 长度控制在 20 字以内
-- 语气自然，符合 NPC 的性格和当前情绪
-- 不要使用现代科技词汇（CPU、AI、手机等）
+- 语气自然，符合 NPC 的性格、情绪和上述世界观设定
 - 可以暗示隐藏信息或解锁线索
+
+{% if state.player.inventory %}
+玩家持有：{{ state.player.inventory | join("、") }}
+{% endif %}
+{% if state.player.recent_actions %}
+最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
+{% endif %}
 
 情境：{{ context }}
 

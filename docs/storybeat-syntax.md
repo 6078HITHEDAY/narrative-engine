@@ -135,15 +135,18 @@ trigger:
 
 | 虚拟字段 | 派生逻辑 | 类型 |
 |----------|---------|------|
-| `_photos_count` | `len(player.inventory)` 或 `player.attributes["photos"]` | int |
 | `_inventory_count` | `len(player.inventory)` | int |
+| `_history_count` | `len(state.history)` | int |
+| `_npc_count` | `len(state.npcs)` | int |
 | `_npc_id` | 当前 `npc_id` 参数 | str |
 
 ```yaml
 trigger:
-  _photos_count: ">=12"           # 照片数量 ≥ 12
+  _inventory_count: ">=3"         # 背包有 3 件以上物品
   _npc_id: fishmonger_li          # 当前交互 NPC 是 fishmonger_li
 ```
+
+游戏特定的计数（照片数、好感度、声望等）请用 `player.attributes.<key>` 在游戏侧维护，触发器写 `player.attributes.photos: ">=12"` 即可。
 
 ## 优先级与 once 语义
 
@@ -279,7 +282,7 @@ beats:
     kind: event
     priority: 50
     trigger:
-      _photos_count: ">=12"
+      player.attributes.photos: ">=12"
     event_title: 照片里的眼睛眨了眨
     text: "你翻看相册，突然发现某张照片里——鱼摊老板对你眨了眨眼。"
     event_choices:

@@ -276,3 +276,188 @@ def test_temperature_passed_to_director():
     assert captured_kwargs.get("npc_mood") == "calm"
 
     # 验证 temperature 实际被正确计算（通过 TemperatureProfile 单元测试覆盖）
+
+
+# ---- Inventory + recent_actions 注入 ----
+
+def _capture_prompt(engine, state, kind="dialogue", **kwargs):
+    captured = []
+
+    def capture(prompt, schema, **_):
+        captured.append(prompt)
+        return Dialogue(text="..."), "raw", 1
+
+    with patch.object(engine._director, "generate", side_effect=capture):
+        engine.tell(state, kind=kind, **kwargs)
+    return captured[0]
+
+
+def test_inventory_injected_into_dialogue_prompt():
+    """非空 inventory 应在 dialogue prompt 中显式出现。"""
+    from narrative_engine import PlayerState
+
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(
+        player={"inventory": ["旧相机", "奶奶的钥匙"]},
+        world={"area": "市场"},
+    )
+    prompt = _capture_prompt(engine, state, kind="dialogue", context="问路")
+    assert "玩家持有" in prompt
+    assert "旧相机" in prompt
+    assert "奶奶的钥匙" in prompt
+
+
+def test_recent_actions_injected_takes_last_three():
+    """recent_actions 注入时应只取最后 3 条。"""
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(
+        player={"recent_actions": ["a1", "a2", "a3", "a4", "a5"]},
+        world={"area": "市场"},
+    )
+    prompt = _capture_prompt(engine, state, kind="event", context="转一圈")
+    assert "最近行动" in prompt
+    section = prompt.split("最近行动：", 1)[1].split("\n", 1)[0]
+    assert "a3" in section and "a4" in section and "a5" in section
+    assert "a1" not in section and "a2" not in section
+
+
+def test_empty_inventory_no_section():
+    """空 inventory 时不应出现「玩家持有」段落，避免污染 prompt。"""
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(world={"area": "市场"})
+    prompt = _capture_prompt(engine, state, kind="description", context="环顾")
+    assert "玩家持有" not in prompt
+    assert "最近行动" not in prompt
+
+
+def test_inventory_in_all_three_kinds():
+    """三种 kind 的内置模板都应注入 inventory。"""
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(player={"inventory": ["数据卡"]}, world={"area": "酒吧"})
+    for kind in ("dialogue", "event", "description"):
+        prompt = _capture_prompt(engine, state, kind=kind, context="...")
+        assert "数据卡" in prompt, f"{kind} prompt 未注入 inventory"
+
+
+# ---- apply_choice ----
+
+def test_apply_choice_appends_to_recent_actions():
+    """选择应追加到 recent_actions。"""
+    from narrative_engine import Event
+
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(world={"area": "码头"})
+    event = Event(title="夜里的动静", description="...", choices=["举起相机", "后退"])
+
+    engine.apply_choice(state, event, "举起相机")
+
+    assert state.player.recent_actions == ["举起相机"]
+
+
+def test_apply_choice_appends_to_history_with_consequence():
+    """history 应包含「事件「...」：选择了「...」→ 后果」。"""
+    from narrative_engine import Event
+
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(world={"area": "码头"})
+    event = Event(
+        title="夜里的动静",
+        description="...",
+        choices=["举起相机", "后退"],
+        consequences={"举起相机": "拍到了奇怪的影子"},
+    )
+
+    engine.apply_choice(state, event, "举起相机")
+
+    assert len(state.history) == 1
+    line = state.history[0]
+    assert "事件「夜里的动静」" in line
+    assert "举起相机" in line
+    assert "拍到了奇怪的影子" in line
+
+
+def test_apply_choice_history_without_consequence():
+    """没有 consequences 映射时仍能写入 history。"""
+    from narrative_engine import Event
+
+    engine = NarrativeEngine(EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    ))
+    state = make_state(world={"area": "码头"})
+    event = Event(title="无果之事", description="...", choices=["A", "B"])
+
+    engine.apply_choice(state, event, "B")
+
+    assert state.history == ["事件「无果之事」：选择了「B」"]
+
+
+def test_apply_choice_invalid_raises():
+    """choice 不在 event.choices 中应抛 ValueError。"""
+    from narrative_engine import Event
+
+    engine = NarrativeEngine(EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    ))
+    state = make_state(world={"area": "码头"})
+    event = Event(title="t", description="d", choices=["A", "B"])
+
+    with pytest.raises(ValueError, match="无效选项"):
+        engine.apply_choice(state, event, "C")
+
+
+def test_apply_choice_returns_same_state():
+    """返回的应是同一个 state 对象，方便链式调用。"""
+    from narrative_engine import Event
+
+    engine = NarrativeEngine(EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    ))
+    state = make_state(world={"area": "码头"})
+    event = Event(title="t", description="d", choices=["A"])
+
+    returned = engine.apply_choice(state, event, "A")
+    assert returned is state
+
+
+def test_apply_choice_then_next_tell_sees_action():
+    """apply_choice 之后，下一轮 tell 的 prompt 应包含该选择。"""
+    from narrative_engine import Event
+
+    config = EngineConfig(
+        backend=LLMBackend(provider=ProviderKind.openai, model="openai/gpt-test"),
+        cache_enabled=False,
+    )
+    engine = NarrativeEngine(config)
+    state = make_state(world={"area": "码头"})
+    event = Event(title="t", description="d", choices=["举起相机"])
+
+    engine.apply_choice(state, event, "举起相机")
+    prompt = _capture_prompt(engine, state, kind="description", context="拍完之后")
+    assert "举起相机" in prompt

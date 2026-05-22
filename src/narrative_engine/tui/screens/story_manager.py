@@ -33,7 +33,7 @@ class StoryManagerScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Label("[bold]故事管理[/]", classes="title")
         with Horizontal(classes="row"):
-            yield Input(placeholder="stories/seaside_town", id="story_path")
+            yield Input(placeholder="stories/<your_story>", id="story_path")
             yield Button("加载故事", id="load_btn", variant="primary")
             yield Button("新建故事", id="new_btn")
         yield Static("", id="story-info")

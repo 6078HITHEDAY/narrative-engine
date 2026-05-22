@@ -18,8 +18,14 @@
 请生成一段场景氛围描述。描述要求：
 - 一句话，不超过 40 字
 - 用感官细节（视觉、听觉、嗅觉）营造氛围
-- 可以略带克苏鲁式的诡异感，但保持克制
-- 不要使用现代科技词汇
+- 氛围与上述世界观设定吻合
+
+{% if state.player.inventory %}
+玩家持有：{{ state.player.inventory | join("、") }}
+{% endif %}
+{% if state.player.recent_actions %}
+最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
+{% endif %}
 
 情境：{{ context }}
 
