@@ -86,10 +86,18 @@ class EngineConfig(BaseModel):
 # ======== 配置解释器用的子模型 ========
 
 class WorldConfig(BaseModel):
-    """世界观设定。"""
+    """世界观设定 + 章节起始状态。
+
+    setting/tone/era 描述世界观，注入 prompt；
+    area/time/weather/chapter 是章节起点，由调用方读出来填进 GameState.world。
+    """
     setting: str = ""
     tone: str = "neutral"
     era: str = ""
+    area: str = ""
+    time: str = ""
+    weather: str = ""
+    chapter: str = ""
     extra: dict[str, str] = Field(default_factory=dict)
 
 

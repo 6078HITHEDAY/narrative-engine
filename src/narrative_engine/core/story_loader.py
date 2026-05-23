@@ -77,11 +77,20 @@ class StoryLoader:
             beats=[StoryBeat(**b) for b in data.get("beats", [])],
         )
 
-        # world: 章节 > 故事默认
+        # world: 以 default_world 为底，章节里写了的字段 overlay 上去
+        base_world = defaults.default_world if defaults else WorldConfig()
         if "world" in data and isinstance(data["world"], dict):
-            chapter.world = WorldConfig(**data["world"])
-        elif defaults:
-            chapter.world = defaults.default_world
+            merged = base_world.model_dump()
+            override = data["world"]
+            extra_override = override.pop("extra", None) if isinstance(override.get("extra"), dict) else None
+            merged.update(override)
+            if extra_override:
+                merged_extra = dict(merged.get("extra") or {})
+                merged_extra.update(extra_override)
+                merged["extra"] = merged_extra
+            chapter.world = WorldConfig(**merged)
+        else:
+            chapter.world = base_world
 
         # fallback: 章节 > 故事默认
         if "fallback" in data and isinstance(data["fallback"], dict):

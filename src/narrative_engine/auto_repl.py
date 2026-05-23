@@ -58,7 +58,17 @@ async def _loop(narrator: AutoNarrator) -> None:
 
 def run_auto_repl(engine: NarrativeEngine) -> None:
     """同步入口：起一个 AutoNarrator，跑自然语言 REPL 直到用户退出。"""
-    state = GameState(player=PlayerState(), world=WorldState())
+    world = WorldState()
+    ch_world = engine.current_chapter_world
+    if ch_world is not None:
+        world = WorldState(
+            area=ch_world.area,
+            time=ch_world.time,
+            weather=ch_world.weather,
+            chapter=ch_world.chapter or engine.current_chapter,
+            extra=dict(ch_world.extra),
+        )
+    state = GameState(player=PlayerState(), world=world)
     narrator = AutoNarrator(engine, state)
 
     print(f"故事: {engine.story_title or '(未加载)'}")

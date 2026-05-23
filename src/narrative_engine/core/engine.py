@@ -179,6 +179,13 @@ class NarrativeEngine:
         return self._current_chapter
 
     @property
+    def current_chapter_world(self):
+        for ch in self._chapters.values():
+            if ch.title == self._current_chapter:
+                return ch.world
+        return None
+
+    @property
     def story_title(self) -> str:
         return self._story_meta.title if self._story_meta else ""
 
