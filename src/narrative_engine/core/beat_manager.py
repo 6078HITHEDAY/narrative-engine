@@ -179,8 +179,10 @@ class BeatManager:
             m = re.match(r"^(<=|>=|<|>|==)\s*(.+)$", expected)
             if m:
                 op, rhs = m.group(1), m.group(2)
+                if value is None:
+                    return False
                 try:
-                    num_val = float(value) if value is not None else 0
+                    num_val = float(value)
                     num_rhs = float(rhs)
                 except (ValueError, TypeError):
                     return False

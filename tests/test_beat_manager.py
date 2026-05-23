@@ -336,3 +336,16 @@ def test_attribute_not_in_model():
     mgr.register(beat)
 
     assert mgr.check(make_state()) is None  # 不抛异常
+
+
+def test_comparison_against_missing_attribute_does_not_match():
+    """缺字段时数值比较一律返回 False，不能把缺失当 0 处理。"""
+    mgr = BeatManager()
+    beat = StoryBeat(
+        id="san_low",
+        kind="description",
+        trigger={"player.attributes.san": "<=60"},
+        text="...",
+    )
+    mgr.register(beat)
+    assert mgr.check(make_state(), kind="description") is None
