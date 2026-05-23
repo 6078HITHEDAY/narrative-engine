@@ -56,19 +56,23 @@ intent, result = await narrator.respond("我走去码头，找鱼贩老李说话
 
 ## 核心设计
 
-```
-GameState ──→ StoryBeat 锚点命中？ ──→ 返回手写文案
-   ↑            │ 否
-   │            ▼
-   │          缓存命中？ ──→ 返回缓存结果
-   │            │ 否
-   │            ▼
-   │          LLM 生成 ──→ 关键词过滤 ──→ 写入缓存 ──→ 返回
-   │            │ 失败
-   │            ▼
-   │        降级保底文案
-   │
-   └── apply_choice(state, event, choice) ←── 玩家选了选项
+```mermaid
+flowchart TD
+    GS["GameState"] --> BEAT{"锚点命中？"}
+    BEAT -- 是 --> HW["返回手写文案"]
+    BEAT -- 否 --> CACHE{"缓存命中？"}
+    CACHE -- 是 --> CR["返回缓存结果"]
+    CACHE -- 否 --> LLM["LLM 生成"]
+    LLM --> FILTER["关键词过滤"]
+    FILTER --> WRITE["写入缓存"]
+    WRITE --> RET["返回"]
+    LLM -- 失败 --> FB["降级保底文案"]
+
+    RET --> CHOICE{"玩家选择？"}
+    FB --> CHOICE
+    HW --> CHOICE
+    CR --> CHOICE
+    CHOICE -- apply_choice --> GS
 ```
 
 ### 四级流水线
