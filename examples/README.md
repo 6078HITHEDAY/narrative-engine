@@ -6,9 +6,12 @@
 |------|---------|------|
 | [basic_usage.py](basic_usage.py) | 四级流水线（StoryBeat 锚点 / 缓存 / LLM / fallback）单回合调用 | `python examples/basic_usage.py` |
 | [interactive_demo.py](interactive_demo.py) | 互动循环：look / talk / event / **choose** + apply_choice + inventory | `python examples/interactive_demo.py [story_dir]` |
+| [auto_demo.py](auto_demo.py) | **傻瓜模式**：纯自然语言驱动，AI 自动路由意图 | `python examples/auto_demo.py [story_dir]` |
 | [generate_story.py](generate_story.py) | **AI 总编剧**：一段灵感生成完整 stories/<name>/ 立即可玩 | `python examples/generate_story.py "<灵感>"` |
 | [streaming_demo.py](streaming_demo.py) | 流式生成（同步 + 异步） | `python examples/streaming_demo.py [story_dir]` |
 | [http_client_demo.py](http_client_demo.py) | 用 httpx 调用 `narrative-engine serve` 暴露的 REST + SSE | `python examples/http_client_demo.py` |
+
+详细文档见 [docs/guide.md](../docs/guide.md)（新手指南）和 [docs/reference.md](../docs/reference.md)（API 参考）。
 
 ## 准备
 
@@ -26,6 +29,7 @@ export NARRATIVE_MODEL=deepseek-v4-pro
 ## 推荐顺序
 
 1. **basic_usage.py** — 5 分钟看懂四级流水线
-2. **interactive_demo.py** — 体验作为玩家的互动循环
-3. **generate_story.py** — 见证"一句话生成完整故事"
-4. **streaming_demo.py** + **http_client_demo.py** — 集成到自己项目时用得上
+2. **interactive_demo.py** — 体验作为玩家的互动循环（命令式）
+3. **auto_demo.py** — 体验纯自然语言驱动（傻瓜模式）
+4. **generate_story.py** — 见证"一句话生成完整故事"
+5. **streaming_demo.py** + **http_client_demo.py** — 集成到自己项目时用得上

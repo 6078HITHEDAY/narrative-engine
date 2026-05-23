@@ -7,7 +7,7 @@ StoryBeat 是引擎区别于"纯 AI 生成"的核心——作者在特定游戏�
 ```yaml
 beats:
   - id: beat_unique_id       # 唯一标识符（必填）
-    kind: dialogue            # 叙事类型：dialogue / event / description（可选）
+    kind: dialogue            # 叙事类型：dialogue / event / description / all（默认 all）
     title: 人类可读标题        # 可选，用于调试
     priority: 80              # 优先级，越大越优先（默认 0）
     once: true                # 是否仅触发一次（默认 true）
@@ -22,6 +22,29 @@ beats:
     event_consequences: { ... } # event 专用
     unlocks: [flag_ids]        # 触发后设置的状态标记
 ```
+
+### kind 字段详解
+
+`kind` 控制 beat 只对特定叙事类型生效：
+
+| kind 值 | 触发时机 |
+|---------|---------|
+| `dialogue` | 仅 `tell(kind="dialogue")` 时匹配 |
+| `event` | 仅 `tell(kind="event")` 时匹配 |
+| `description` | 仅 `tell(kind="description")` 时匹配 |
+| `all`（默认） | 任意 `kind` 都匹配 |
+
+```yaml
+# 只在生成对话时触发——避免 event/description 误吃
+- id: npc_special_dialogue
+  kind: dialogue
+  trigger:
+    world.area: old_dock
+    _npc_id: fishmonger_li
+  text: "孩子，你知道这片海以前叫什么吗？"
+```
+
+不设 `kind`（或设 `all`）时，beat 对三种叙事类型都参与匹配。适合纯环境描述类的锚点。
 
 ## 触发条件 (trigger)
 
@@ -146,6 +169,8 @@ trigger:
   _npc_id: fishmonger_li          # 当前交互 NPC 是 fishmonger_li
 ```
 
+`_npc_id` 只在 `tell()` 传了 `npc_id` 时才有值——通常配合 `kind: dialogue` 使用，避免在 event/description 场景下误命中。
+
 游戏特定的计数（照片数、好感度、声望等）请用 `player.attributes.<key>` 在游戏侧维护，触发器写 `player.attributes.photos: ">=12"` 即可。
 
 ## 优先级与 once 语义
@@ -174,16 +199,29 @@ beats:
 
 ### once
 
-- `once: true`（默认）：触发后标记为 `fired`，之后不再触发
-- `once: false`：可重复触发
+- `once: true`（默认）：触发后标记为 `fired`，之后不再触发。适合关键剧情节点。
+- `once: false`：每次条件满足都会触发。适合环境描述、常数化反馈。
 
 ```yaml
-- id: weather_description
+# 每次下雨都会触发的环境描述
+- id: weather_rain
   once: false
+  priority: 5
   trigger:
     world.weather: rain
   text: "雨水打在石板路上，发出细碎的响声。"
+
+# 每次进入市场都能看到的基础描述（低优先级，可被更高优先级 beat 覆盖）
+- id: market_ambient
+  once: false
+  priority: 2
+  kind: description
+  trigger:
+    world.area: market
+  text: "市场里人来人往，摊贩的吆喝声此起彼伏。"
 ```
+
+注意：`once: false` 的 beat 不能被更高优先级的 beat "覆盖"——beat 匹配只取 priority 最高的那个。如果你想让市场描述作为"兜底"（只在没有更具体的 beat 命中时触发），给它设低 priority 值。
 
 ## 手写输出
 
@@ -247,7 +285,32 @@ beats:
     - tutorial_complete
 ```
 
-触发后可通过 `engine.beat_manager.fired` 查看，后续 beat 可通过 `player.flags` 引用这些标记。
+`unlocks` 声明的标记会在 beat 触发后通过 `engine.beat_manager.mark_fired` 记录。**游戏层负责把标记同步到 `state.player.flags`**，后续 beat 通过 `player.flags.<标记名>: true` 引用：
+
+```yaml
+# 游戏层在每轮 tell() 前做：
+state.player.flags["chapter1_start"] = True
+
+# 后续 beat 依赖此标记
+- id: after_tutorial
+  trigger:
+    player.flags.chapter1_start: true
+    world.area: market
+  text: "你开始注意到镇上居民看你的眼神有些不一样了。"
+```
+
+引擎不自��管理 flags（`beat_manager.fired` 只管去重），因为每个游戏的 flag 体系不同——这条边界让引擎对任何题材保持通用。
+
+### 查看已触发标记
+
+```python
+# beat_manager 内部去重集合
+print(engine.beat_manager.fired)  # {"prologue_arrival", "camera_unlock"}
+
+# 待触发 beats
+for beat in engine.beat_manager.pending:
+    print(f"  {beat.id}: {beat.title or '(无标题)'}")
+```
 
 ## 完整示例
 
@@ -322,3 +385,38 @@ beats:
     text: "两侧的阴影比别处更深，空气里弥漫着说不清的腥味。"
     mood: eerie
 ```
+
+## 调试技巧
+
+### 判断为什么某个 beat 没有命中
+
+```python
+# 检查当前 state + kind + npc_id 下会命中哪些 beat
+from narrative_engine.core.beat_manager import BeatManager
+
+# 手动调 _evaluate 看每个条件的匹配结果
+for beat in engine.beat_manager.pending:
+    ok = engine.beat_manager._evaluate(state, beat.trigger, "fishmonger_li")
+    print(f"{beat.id}: evaluate={ok}, kind={beat.kind}, priority={beat.priority}")
+```
+
+### 常见未命中原因
+
+| 症状 | 原因 | 修复 |
+|------|------|------|
+| 所有 beat 都不触发 | `once: true` 的 beat 已在上一轮被 `mark_fired` | `engine.reset_beats()` |
+| 比较运算符不生效 | YAML 未加引号，`<=80` 被解析为非字符串 | `"<=80"` 加引号 |
+| `kind: dialogue` 的 beat 在 `tell(kind="event")` 时不触发 | `kind` 过滤是精确匹配 | 去掉 `kind` 或设为 `all` |
+| `_npc_id` 条件不生效 | `tell()` 未传 `npc_id` 参数 | 确保 `npc_id` 正确传入 |
+| 正则 `"/dock/"` 不命中 | 正则用 `re.search`，部分匹配；需完整匹配用 `^...$` | 调整正则表达式 |
+| `player.attributes.san` 返回 `None` | 缺字段时 `_resolve` 返回 `None`，与数字比较直接失败 | 确保属性已初始化 |
+
+### 状态文件
+
+beat 的 fired 集合持久化在 `stories/<故事名>/.state/story_state.json`：
+
+```json
+{"fired": ["prologue_arrival", "camera_unlock"]}
+```
+
+删除此文件或调用 `engine.reset_beats()` 即可重置全部 beat 状态。切章节不会清空 fired（`replace_beats` 保留 fired 集合），所以跨章节引用的 beat ID 不会重复触发。

@@ -407,6 +407,12 @@ narrative-engine/
 └── pyproject.toml
 ```
 
+## 文档
+
+- **[guide.md](docs/guide.md)** — 新手指南：从安装到第一个互动故事的核心路径
+- **[reference.md](docs/reference.md)** — API 与配置参考：SDK 进阶、环境变量全表、高级配置
+- **[storybeat-syntax.md](docs/storybeat-syntax.md)** — StoryBeat 触发系统语法参考（锚点条件、优先级、手写输出）
+
 ## 当前进度
 
 ### 已完成 (v0.1.0)
@@ -430,7 +436,7 @@ narrative-engine/
 
 ### 待完成
 
-- [ ] **详细文档**：完善 `docs/` 目录下的使用指南
+- [x] **详细文档**：[guide.md](docs/guide.md) + [reference.md](docs/reference.md) + [storybeat-syntax.md](docs/storybeat-syntax.md)
 - [ ] **更多故事模板**：提供不同题材的示例故事
 
 ## License

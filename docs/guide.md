@@ -9,12 +9,13 @@
 5. [如何写自己的故事](#如何写自己的故事)
 6. [Python SDK](#python-sdk)
 7. [AI 驱动互动剧情](#ai-驱动互动剧情)
-8. [CLI 工具](#cli-工具)
-9. [TUI 管理面板](#tui-管理面板)
-10. [HTTP API](#http-api)
-11. [启动验证](#启动验证)
-12. [记忆系统](#记忆系统)
-13. [Prompt 策略](#prompt-策略)
+8. [自然语言驱动（傻瓜模式）](#自然语言驱动傻瓜模式)
+9. [AI 总编剧（故事生成器）](#ai-总编剧故事生成器)
+10. [CLI 工具](#cli-工具)
+11. [TUI 管理面板](#tui-管理面板)
+12. [HTTP API](#http-api)
+13. [启动验证](#启动验证)
+14. [进阶参考](#进阶参考)
 
 ---
 
@@ -402,72 +403,7 @@ print(result.description.text)
 print(result.description.mood)    # "eerie"
 ```
 
-### 异步 API
-
-```python
-import asyncio
-
-async def main():
-    engine = NarrativeEngine.from_story("stories/seaside_town")
-
-    # 异步加载
-    await engine.load_story_async("stories/seaside_town")
-
-    # 异步生成
-    result = await engine.tell_async(state, kind="dialogue", npc_id="fishmonger_li")
-
-    # 异步流式
-    async for partial in engine.tell_stream_async(state, kind="event"):
-        if hasattr(partial, "text"):
-            print(partial.text, end="", flush=True)
-```
-
-### 流式生成
-
-```python
-# 同步流式
-for partial in engine.tell_stream(state, kind="dialogue", npc_id="fishmonger_li"):
-    if hasattr(partial, "text"):
-        print(partial.text, end="", flush=True)
-    elif hasattr(partial, "dialogue"):
-        # 完整 NarrativeOutput（锚点命中时直接 yield）
-        print(f"\n[锚点] {partial.dialogue.text}")
-```
-
-### 章节和 NPC 管理
-
-```python
-# 章节
-print(engine.list_chapters())          # ["chapter_1", "chapter_2"]
-print(engine.current_chapter)          # "第一章 · 抵达"
-engine.switch_chapter("chapter_2")
-
-# NPC
-print(list(engine.npcs.keys()))        # ["fishmonger_li", "lighthouse_keeper", ...]
-engine.reload_npcs()                   # 从 npcs.yaml 热重载
-
-# 状态持久化
-engine.save_state()                    # 保存已触发的 beat 状态
-engine.load_state()                    # 恢复
-```
-
-### 访问内部组件
-
-```python
-# 记忆系统
-if engine.memory:
-    engine.memory.remember("fishmonger_li", "玩家帮忙修好了渔网", importance=5)
-    records = engine.memory.recall("fishmonger_li", limit=10)
-    engine.memory.new_session()  # 重置会话上下文
-
-# 缓存
-if engine._cache:
-    engine._cache.clear()
-
-# Beat 管理
-print(engine.beat_manager.pending)     # 待触发 beats
-print(engine.beat_manager.fired)       # 已触发 beats
-```
+异步 API、流式生成、章节/NPC 管理、内部组件访问见 [reference.md](reference.md)。
 
 ---
 
@@ -545,64 +481,119 @@ next_result = engine.tell(state, kind="description", context="拍完之后")
 print(next_result.description.text)
 ```
 
-### 玩家视角注入到 prompt
+玩家视角注入（inventory/recent_actions 如何进入 prompt）和自定义 prompt 模板见 [reference.md](reference.md)。完整互动 demo：`examples/interactive_demo.py`，支持 `talk`、`event`、`choose`、`pick`、`drop`、`inv` 等命令。
 
-引擎在渲染 prompt 模板时，会把以下两个字段（如果非空）以醒目段落注入末尾：
+---
 
-- `state.player.inventory: list[str]` — 当前持有物
-- `state.player.recent_actions: list[str]` — 最近行动（取最后 3 条）
+## 自然语言驱动（傻瓜模式）
 
-模板片段（出现在所有内置 `.j2` 中）：
+傻瓜模式是引擎最高层封装——玩家直接用自然语言输入（"去码头看看"、"跟鱼贩聊天"、"选第一项"），引擎内部调一次 LLM 做意图路由，自动判定 `kind`、选择 `npc_id`、切换 `world.area`、响应待处理的 event 选项，再走正常的四级流水线出文案。
 
-```jinja
-{% if state.player.inventory %}
-玩家持有：{{ state.player.inventory | join("、") }}
-{% endif %}
-{% if state.player.recent_actions %}
-最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
-{% endif %}
+### 快速体验
+
+```bash
+# CLI 一行启动
+narrative-engine play stories/seaside_town
+
+# 或用 Python 脚本
+python examples/auto_demo.py stories/seaside_town
 ```
 
-**为什么显式抽出来**：完整 `state_json` 嵌套很深，AI 容易忽略字段；提到末尾让模型感知更明确。
+进入 REPL 后直接输入自然语言：
 
-**为什么用条件渲染**：纯对话游戏 / 视觉小说不一定需要 inventory 概念，留空时这两段不出现，不污染 prompt。
+```
+故事: 海边小镇
+章节: 第一章 · 抵达
+NPC: ['fishmonger_li', 'lighthouse_keeper']
+傻瓜模式：直接输入自然语言（输入 quit 退出）
 
-**字段都是 `list[str]`**：作者可以放任意字符串——「相机」、「数据卡」、「断剑」、「黑曜石碎片」——引擎不关心内容含义。
+> 去老房子看看
+  · 切到: grandma_house
+[description/storybeat] 你站在奶奶的老房子前。相机挂在脖子上，镜头盖内刻着一行字。
 
-### 自定义 prompt 模板
+> 跟鱼贩老李聊聊今天的渔获
+  · 切到: old_dock
+[fishmonger_li/dialogue/openai/deepseek-v4-pro] 今天的鱼不新鲜。你要是想买，等明天早潮吧。
 
-如果默认模板的"克苏鲁味"不符合你的题材（比如你写的是赛博朋克或武侠），可以通过 `PromptTemplates` 全量覆盖：
+> 深夜在码头待到很晚
+  · 切到: old_dock
+[event/openai/deepseek-v4-pro] 事件: 暗处有东西在看你
+  水面下有什么巨大的轮廓缓缓滑过……
+  1. 举起相机
+  2. 慢慢后退
+  3. 扔一块石头
 
-```python
-from narrative_engine import NarrativeEngine, EngineConfig, PromptTemplates
+> 我选第一个
+[description/openai/deepseek-v4-pro] 取景框里的画面让你的手止不住地颤抖...
 
-custom = PromptTemplates(
-    dialogue="""
-你是赛博朋克世界的 NPC：{{ npc.name if npc else "路人" }}。
-{% if npc %}性格：{{ npc.traits | join("、") }}。情绪：{{ npc.mood }}。{% endif %}
-
-世界观：{{ world_setting }}
-当前状态：{{ state_json }}
-
-{% if state.player.inventory %}
-玩家持有：{{ state.player.inventory | join("、") }}
-{% endif %}
-
-{{ context }}
-
-请生成一句 NPC 对话，要带街头黑话。返回 JSON：
-{"text": "...", "mood_change": 0, "unlock_hint": null}
-""",
-    event="...",          # 同样可覆盖 event 模板
-    description="...",    # 同样可覆盖 description 模板
-)
-
-engine = NarrativeEngine(EngineConfig(prompt_templates=custom))
+> quit
 ```
 
-`PromptTemplates`（`models/config.py:96`）的三个字段对应三种 `kind`，留空就回退到内置 `.j2`。变量集与内置一致：`world_setting / state / state_json / context / session_context / memory_context / npc`。
+每次输入后，引擎输出 `[kind/backend]` 标签，让你知道走的是锚点 (`storybeat`)、缓存还是 LLM。
 
-完整可运行的互动 demo 见 `examples/interactive_demo.py`，支持 `talk`、`event`、`choose`、`pick`、`drop`、`inv` 等命令。
+### 意图路由机制
+
+`AutoNarrator` 每轮调一次 LLM（轻量 `AutoIntent` schema）做三件事：
+
+1. **判定叙事类型**：分析用户输入决定该出 dialogue / event / description
+2. **选择交互目标**：如果用户提到 NPC 名字，自动匹配 `npc_id`
+3. **检测场景切换**：用户说"去码头"就切 `world.area = "old_dock"`
+4. **响应待处理选项**：如果上一轮引擎出了 event（带 choices），用户说"选第一个"时自动调 `apply_choice()` 推进剧情
+
+路由失败的极端情况（如 LLM 不可用）会退回到默认 description + 当前 area，不会中断交互。
+
+`AutoNarrator` SDK 编程接口（`AutoIntent` 字段、交互循环模板）见 [reference.md](reference.md)。完整示例：`examples/auto_demo.py`。
+
+---
+
+## AI 总编剧（故事生成器）
+
+StoryGenerator 接收一句自然语言灵感，调用 LLM 一次性生成完整的故事目录——`story.yaml` + `npcs.yaml` + `chapters/*.yaml`，落盘后立即可被 `NarrativeEngine.from_story()` 加载。
+
+### CLI 生成
+
+```bash
+narrative-engine generate --idea "赛博朋克背景的侦探故事，主角是退役义体医生" --out stories/cyber_detective
+
+# 可选参数
+narrative-engine generate \
+  --idea "魔法学院里的学生会选举暗流涌动" \
+  --out stories/magic_academy \
+  --npcs 5 \
+  --beats 8 \
+  --overwrite
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--idea` | 故事灵感（自然语言，支持中英文） | (必填) |
+| `--out` | 输出目录 | (自动从 idea 生成 slug) |
+| `--npcs` | 生成 NPC 数量 | `3` |
+| `--beats` | 每章生成 StoryBeat 数量 | `5` |
+| `--overwrite` | 强制覆盖已存在的目录 | 否 |
+
+如果不传 `--idea`，CLI 会交互式提示输入。
+
+### 生成结果
+
+```
+stories/cyber_detective/
+├── story.yaml          # 标题 + default_world + 保底文案池
+├── npcs.yaml           # 3-5 个 NPC（性格、情绪、预设记忆）
+└── chapters/
+    ├── chapter_1.yaml  # 第一章（world 覆盖 + beats 锚点）
+    ├── chapter_2.yaml  # 第二章
+    └── chapter_3.yaml  # 第三章
+```
+
+生成后立即可用：
+
+```bash
+narrative-engine serve --story stories/cyber_detective
+narrative-engine play stories/cyber_detective
+```
+
+`StoryGenerator` SDK 编程接口（同步/异步、显式 `LLMBackend` 配置）见 [reference.md](reference.md)。完整示例：`examples/generate_story.py`。
 
 ---
 
@@ -619,6 +610,8 @@ narrative-engine <command> [options]
 | `dialogue` | 生成对话 | `narrative-engine dialogue --area "码头" --npc "fishmonger_li" --context "..."` |
 | `event` | 生成事件 | `narrative-engine event --area "海边" --context "捡到漂流瓶"` |
 | `describe` | 生成描述 | `narrative-engine describe --area "废弃灯塔"` |
+| `generate` | AI 生成故事目录 | `narrative-engine generate --idea "赛博朋克武侠江湖" --out stories/cyber_wuxia` |
+| `play` | 自然语言傻瓜模式 | `narrative-engine play stories/seaside_town` |
 | `shell` | 交互模式 | `narrative-engine shell` |
 | `serve` | HTTP API | `narrative-engine serve --story stories/seaside_town --port 8000` |
 | `tui` | TUI 面板 | `narrative-engine tui` |
@@ -627,10 +620,14 @@ narrative-engine <command> [options]
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `NARRATIVE_BACKEND` | API 格式 | `openai` |
+| `NARRATIVE_BACKEND` | API 格式 (`openai` / `anthropic`) | `openai` |
 | `NARRATIVE_API_KEY` | API 密钥 | (空) |
 | `NARRATIVE_API_BASE` | API 端点 URL | (空) |
 | `NARRATIVE_MODEL` | 模型名称 | (空，使用默认) |
+| `NARRATIVE_STRUCTURED_OUTPUT_MODE` | 结构化输出模式 (`tools` / `json`) | (空，自动探测) |
+| `NARRATIVE_REASONING_MODEL` | 是否启用 reasoning 模式 | (空) |
+| `NARRATIVE_REASONING_MAX_TOKENS` | reasoning 模式最大 token 数 | (空) |
+| `NARRATIVE_GENERATOR_MAX_TOKENS` | story generator 最大 token 数 | `4096` |
 
 ### 交互模式
 
@@ -685,33 +682,7 @@ narrative-engine serve --story stories/seaside_town --host 0.0.0.0 --port 8000
 | `/story/chapter/switch` | POST | 切换到指定章节（body: `{"chapter": "<name>"}`） |
 | `/story/npcs/reload` | POST | 从 npcs.yaml 热重载 NPC |
 
-### 请求格式
-
-```json
-POST /tell
-{
-  "state": {
-    "player": {"name": "player", "attributes": {"hp": 100}},
-    "world": {"area": "marketplace", "time": "noon"}
-  },
-  "kind": "dialogue",
-  "context": "玩家询价",
-  "npc_id": "trader",
-  "stream": false
-}
-```
-
-### 流式响应 (SSE)
-
-把请求体里的 `stream` 设成 `true` 即可：
-
-```bash
-curl -N -X POST http://localhost:8000/tell \
-  -H "Content-Type: application/json" \
-  -d '{"state":{"world":{"area":"marketplace"}},"kind":"dialogue","context":"你好","stream":true}'
-```
-
-事件流：每个 `data:` 是一行 `partial` JSON，最后一条是 `[DONE]`。
+请求/响应格式和 SSE 流式细节见 [reference.md](reference.md)。
 
 ---
 
@@ -738,136 +709,22 @@ curl -N -X POST http://localhost:8000/tell \
 | HTTP | uvicorn 起来 → `GET /health` → `GET /story` → `POST /tell`（beat-anchored payload） | 否（默认走锚点） |
 | TUI  | `App.run_test()` 跑一次事件循环，5 个 screen 全部 mount 成功 | 否 |
 
-### 环境变量
-
-| 变量 | 默认 | 说明 |
-|------|------|------|
-| `STORY` | `stories/seaside_town` | 故事目录 |
-| `PORT`  | `18234` | HTTP 端口 |
-| `HOST`  | `127.0.0.1` | HTTP 监听地址 |
-| `NO_TELL` | `0` | 设 `1` 跳过 `/tell` 探测（用于非 seaside_town 故事，beat 锚点不会命中） |
-| `TELL_PAYLOAD_FILE` | — | 自定义 `/tell` payload 的 JSON 文件路径 |
-
-### `/tell` 探测细节
-
-driver 默认发的 payload：
-
-```json
-{"state":{"world":{"area":"grandma_house","chapter":"第一章"}},"kind":"description","context":""}
-```
-
-这份状态命中 `stories/seaside_town/chapters/chapter_1.yaml` 里的 `prologue_arrival` beat（`world.area: grandma_house` + `world.chapter: 第一章`），所以走 StoryBeat 锚点直接返回手写文案，**不需要 LLM key**。
-
-失败判定：
-
-- `kind` 不是 `description` → payload 编码挂了（多半是 locale 问题，driver 已经用 heredoc 写文件 + `curl -d @file` 规避了 `env -i` 下的 UTF-8 字面量被打成 `?`）
-- `degraded:true` → 锚点没命中，引擎降级到 LLM，但又没 API key → 报错并提示设 `NARRATIVE_API_KEY` 或 `NO_TELL=1`
-
-换故事时，要么 `NO_TELL=1` 跳过 `/tell`，要么用 `TELL_PAYLOAD_FILE` 指向一份能命中你自己 chapter 1 锚点的 payload。
-
-### 失败排查
-
-| 症状 | 多半是 |
-|------|--------|
-| `.venv not found` | 还没装环境，先 `pip install -e ".[api,tui,dev]"` |
-| `需要安装 API 依赖` | 装的是基础 extras，补 `[api]` |
-| `/health` 15s 超时 | 端口被占 / 别的 uvicorn 没退干净 → `lsof -i:18234` |
-| TUI smoke 抛 `ImportError: textual` | 缺 `[tui]` extras |
-| TUI smoke 抛 `compose()` 异常 | 改坏了某个 screen，看 traceback 定位 `src/narrative_engine/tui/screens/*.py` |
-
-详细文档见 `.claude/skills/run/SKILL.md`。
+Driver 的环境变量、`/tell` 探测细节和失败排查见 [reference.md](reference.md)。
 
 ---
 
-## 记忆系统
+## 进阶参考
 
-### 两层架构
+以上覆盖了从安装到第一个互动故事的核心路径。以下主题见 [reference.md](reference.md)（API 与配置参考）：
 
-| 层级 | 类型 | 生命周期 | 用途 |
-|------|------|---------|------|
-| Session | 短期 | 当前会话 | 维护对话上下文，最近 N 轮注入 prompt |
-| Memory | 长期 | 跨会话持久化 | NPC 对玩家的持久记忆，JSON 文件存储 |
-
-### 配置
-
-```python
-config = EngineConfig(
-    memory_enabled=True,
-    memory_size=20,      # 每个 NPC 最多记忆条数
-    session_turns=5,     # prompt 中包含的最近轮数
-    memory_path=".state/memories.json",
-)
-```
-
-### 记忆淘汰策略
-
-- 按 `importance` 降序、`timestamp` 降序排列
-- 超过 `memory_size` 条时淘汰低重要性的旧记忆
-- 完全相同内容自动去重
-
-### 编程接口
-
-```python
-# 写入记忆
-engine.memory.remember("fishmonger_li", "玩家帮忙修好了渔网", importance=5)
-
-# 召回记忆（按重要性排序）
-records = engine.memory.recall("fishmonger_li", limit=10)
-for r in records:
-    print(f"[{r.kind}] {r.content} (重要性: {r.importance})")
-
-# 导出会话上下文（注入 prompt）
-context = engine.memory.session_context()
-
-# 新建会话（清空短期上下文）
-engine.memory.new_session()
-
-# 清空全部记忆
-engine.memory.clear()
-```
-
----
-
-## Prompt 策略
-
-### Temperature 动态调整
-
-TemperatureProfile 根据叙事类型和 NPC 情绪微调 temperature：
-
-```python
-# 默认调整量
-kind_adjustments = {
-    "dialogue": -0.05,    # 对话稍保守
-    "event": 0.1,         # 事件需要更多创意
-    "description": 0.0,   # 描述不变
-}
-
-mood_adjustments = {
-    "angry": 0.15,        # 愤怒时更不可预测
-    "excited": 0.1,
-    "calm": -0.1,         # 平静时更稳定
-    "peaceful": -0.1,
-    "sad": -0.05,
-}
-```
-
-可在 LLMBackend 中禁用：
-```python
-backend = LLMBackend(
-    temperature_profile=TemperatureProfile(enabled=False),
-)
-```
-
-### NPC Persona 注入
-
-对话生成时自动将 NPC 性格信息注入 prompt：
-
-```
-## 你的角色
-你是 鱼贩老李。性格特点：沉默寡言、认识奶奶、二十年老摊主。
-当前情绪：grumpy。与玩家的关系亲密度：0.0。
-```
-
-### 自适应重试
-
-LLM 调用失败后自动以 `temperature × 0.6` 重试一次，处理网络超时等临时性错误。
+| 主题 | 说明 |
+|------|------|
+| Python SDK 进阶 | `tell_async`、`tell_stream`、章节/NPC 管理、内部组件访问 |
+| 互动剧情深度 | 玩家视角注入、自定义 prompt 模板 |
+| 傻瓜模式 SDK | `AutoNarrator` API、`AutoIntent` 字段、交互循环模板 |
+| AI 总编剧 SDK | `StoryGenerator` 同步/异步 API、显式 `LLMBackend` 配置 |
+| HTTP API 详细 | 请求/响应格式、SSE 流式细节 |
+| 记忆系统 | 两层架构、淘汰策略、编程接口 |
+| Prompt 策略 | Temperature 动态调整、NPC Persona 注入、自适应重试 |
+| 环境变量完整参考 | 全部 8 个环境变量 + `LLMBackend` 字段对照 |
+| 高级配置 | Structured Output 模式、Reasoning Model、过滤器、缓存、ConfigInterpreter |
