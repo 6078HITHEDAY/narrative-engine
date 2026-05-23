@@ -327,6 +327,8 @@ narrative-engine serve --story stories/seaside_town --port 8000
 
 改完代码、提 PR 前，跑一次 `run` skill 把三个表面都点一遍——`pytest` 通过不代表 import / 路由装配 / TUI mount 不会回归。
 
+> `.claude/skills/run/` 是一个 [Claude Code](https://claude.com/claude-code) skill，但 `driver.sh` 本身就是个普通 bash 脚本，**不依赖 Claude Code 也能直接跑**。
+
 ```bash
 .claude/skills/run/driver.sh           # CLI + HTTP + TUI 全跑
 .claude/skills/run/driver.sh cli       # 只验 CLI

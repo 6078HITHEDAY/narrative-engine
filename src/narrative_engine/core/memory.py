@@ -122,6 +122,26 @@ class MemoryManager:
         self._turns.clear()
         self._turn_counter = 0
 
+    def list_records(self, npc_id: str | None = None) -> list[MemoryRecord]:
+        """列出长期记忆。npc_id=None 返回全部，按 (importance, timestamp) 降序。"""
+        if npc_id is not None:
+            return list(self._memories.get(npc_id, []))
+        all_records: list[MemoryRecord] = []
+        for records in self._memories.values():
+            all_records.extend(records)
+        all_records.sort(key=lambda r: (r.importance, r.timestamp), reverse=True)
+        return all_records
+
+    def list_turns(self, npc_id: str | None = None) -> list[SessionTurn]:
+        """列出短期会话。npc_id=None 返回全部，否则只返回该 NPC 的轮次。"""
+        if npc_id is None:
+            return list(self._turns)
+        return [t for t in self._turns if t.npc_id == npc_id]
+
+    def list_npc_ids(self) -> list[str]:
+        """有长期记忆的 NPC id 列表。"""
+        return sorted(self._memories.keys())
+
     async def asave(self, path: str | None = None) -> None:
         p = Path(path) if path else self._path
         if not p:

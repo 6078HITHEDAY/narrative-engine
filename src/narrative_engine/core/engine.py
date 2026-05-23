@@ -250,6 +250,14 @@ class NarrativeEngine:
         loader = StoryLoader(self._story_dir)
         self._npcs = loader.load_npcs()
 
+    def set_npc(self, npc_id: str, npc) -> None:
+        """添加或更新内存中的 NPC。持久化需调用方写 npcs.yaml。"""
+        self._npcs[npc_id] = npc
+
+    def delete_npc(self, npc_id: str) -> bool:
+        """从内存删除 NPC。返回是否真的删除了。"""
+        return self._npcs.pop(npc_id, None) is not None
+
     def _apply_chapter(self, ch) -> None:
         from narrative_engine.models.config import ChapterConfig
 
