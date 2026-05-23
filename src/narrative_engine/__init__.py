@@ -1,3 +1,11 @@
+import os as _os
+import logging as _logging
+
+_os.environ.setdefault("LITELLM_LOG", "ERROR")
+for _name in ("LiteLLM", "litellm"):
+    _logging.getLogger(_name).setLevel(_logging.ERROR)
+del _os, _logging, _name
+
 import logging
 
 from narrative_engine.core.engine import NarrativeEngine
