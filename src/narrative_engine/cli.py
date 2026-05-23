@@ -15,11 +15,10 @@ import sys
 
 
 def main() -> None:
-    print("narrative-engine v0.1.0")
-    print("用法: narrative-engine [dialogue|event|describe|generate|shell|serve|tui|play] [选项]")
-    print()
-
     if len(sys.argv) < 2:
+        print("narrative-engine v0.1.0")
+        print("用法: narrative-engine [dialogue|event|describe|generate|shell|serve|tui|play] [选项]")
+        print()
         print("示例:")
         print('  narrative-engine dialogue --area "<area>" --npc "<npc_id>" --context "<情境>"')
         print('  narrative-engine event --area "<area>" --context "<情境>"')
