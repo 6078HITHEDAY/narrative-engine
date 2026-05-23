@@ -27,7 +27,8 @@ narrative-engine 是一个**底层叙事中间件**。
 ```bash
 narrative-engine tui                                    # TUI 管理面板
 narrative-engine serve --story stories/seaside_town     # HTTP API
-python examples/interactive_demo.py stories/<your>      # 终端交互 demo
+narrative-engine play stories/seaside_town              # 傻瓜模式：纯自然语言
+python examples/interactive_demo.py stories/<your>      # 终端交互 demo（命令式）
 ```
 
 **作为库引入**（嵌入你的游戏）：
@@ -38,6 +39,20 @@ engine = NarrativeEngine.from_story("stories/<your_story>")
 result = engine.tell(state, kind="dialogue", npc_id="...")
 engine.apply_choice(state, result.event, choice_text)   # choice 反馈
 ```
+
+**傻瓜模式（自然语言驱动）**：
+
+```python
+from narrative_engine import NarrativeEngine, AutoNarrator
+
+engine = NarrativeEngine.from_story("stories/seaside_town")
+narrator = AutoNarrator(engine)
+
+# 用户只发自然语言，AI 自己判断 kind / 选 NPC / 推 area / 响应事件选项
+intent, result = await narrator.respond("我走去码头，找鱼贩老李说话")
+```
+
+`AutoNarrator` 在 `engine.tell()` 之前先调一次 LLM 做意图路由，把口语化输入翻译成 `(kind, npc_id, new_area, choice_index)`，然后正常走四级流水线。引擎核心不变。
 
 ## 核心设计
 

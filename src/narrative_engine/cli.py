@@ -16,7 +16,7 @@ import sys
 
 def main() -> None:
     print("narrative-engine v0.1.0")
-    print("用法: narrative-engine [dialogue|event|describe|generate|shell|serve|tui] [选项]")
+    print("用法: narrative-engine [dialogue|event|describe|generate|shell|serve|tui|play] [选项]")
     print()
 
     if len(sys.argv) < 2:
@@ -27,6 +27,7 @@ def main() -> None:
         print('  narrative-engine shell')
         print('  narrative-engine serve --port 8000 --story stories/<故事名>')
         print('  narrative-engine tui')
+        print('  narrative-engine play stories/<故事名>     # 傻瓜模式：纯自然语言互动')
         return
 
     cmd = sys.argv[1]
@@ -38,6 +39,8 @@ def main() -> None:
         _serve(kwargs)
     elif cmd == "tui":
         _tui()
+    elif cmd == "play":
+        _play(sys.argv[2:], kwargs)
     elif cmd in ("dialogue", "event", "describe"):
         kind = "description" if cmd == "describe" else cmd
         _run_generation(kind, kwargs)
@@ -128,6 +131,32 @@ def _tui() -> None:
         return
     app = NarrativeTUI()
     app.run()
+
+
+def _play(positional: list[str], kwargs: dict) -> None:
+    """傻瓜模式：纯自然语言驱动叙事引擎。"""
+    from pathlib import Path
+
+    from narrative_engine import NarrativeEngine
+    from narrative_engine.auto_repl import run_auto_repl
+
+    story = kwargs.get("story", "")
+    if not story:
+        for arg in positional:
+            if not arg.startswith("--"):
+                story = arg
+                break
+
+    if not story:
+        print("用法: narrative-engine play <story_dir>")
+        sys.exit(1)
+    if not Path(story).is_dir():
+        print(f"故事目录不存在: {story}")
+        sys.exit(1)
+
+    engine = NarrativeEngine.from_story(story)
+    engine.reset_beats()
+    run_auto_repl(engine)
 
 
 def _parse_args(args: list[str]) -> dict:

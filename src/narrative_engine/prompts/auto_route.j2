@@ -1,0 +1,34 @@
+{% if world_setting %}世界观：{{ world_setting }}
+{% endif %}
+当前场景：{{ state.world.area or "(未指定)" }}
+{% if state.world.chapter %}章节标记：{{ state.world.chapter }}
+{% endif %}{% if current_chapter %}当前进度：{{ current_chapter }}
+{% endif %}
+{% if npcs %}可选 NPC（玩家说话或提及时匹配到 npc_id）：
+{% for npc in npcs %}- {{ npc.id }} · {{ npc.name }}（{{ npc.traits | join("、") or "无特征" }}）
+{% endfor %}{% endif %}
+{% if pending_event %}---
+有一个等待玩家响应的事件：「{{ pending_event.title }}」
+{{ pending_event.description }}
+玩家可选行动：
+{% for c in pending_event.choices %}{{ loop.index0 }}. {{ c }}
+{% endfor %}
+如果玩家这一句在回应这些选项之一，把对应序号填入 choice_index；否则填 -1。
+---
+{% endif %}
+{% if state.player.recent_actions %}最近行动：{{ state.player.recent_actions[-3:] | join(" → ") }}
+{% endif %}
+玩家自然语言输入：{{ user_input }}
+
+请判断玩家意图，填写 AutoIntent JSON：
+- kind：
+  · 玩家在和 NPC 说话/打招呼/提问 → "dialogue"
+  · 玩家想做有后果的动作（探查、闯入、尝试新事物、给出物品、动手） → "event"
+  · 玩家想观察、感受、聆听、了解周围 → "description"
+- npc_id：仅当 kind=dialogue 且玩家这句话指向某个上面列出的 NPC 时填该 id；否则空串
+- rewritten_context：用一句中文简洁正式地复述玩家意图，去掉口语和废话，保留核心动作和情绪，不超过 50 字
+- new_area：仅当玩家明确说想去某个具体地点时填一个简短的 snake_case 标识（与现有 area 风格一致）；玩家只是观察或对话时空串
+- choice_index：见上
+- reasoning：一句话说明判断依据（中文，不超过 20 字）
+
+只输出 JSON，不要任何额外说明。

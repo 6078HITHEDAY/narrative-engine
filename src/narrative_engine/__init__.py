@@ -2,6 +2,7 @@ import logging
 
 from narrative_engine.core.engine import NarrativeEngine
 from narrative_engine.core.director import AIDirector, DirectorError
+from narrative_engine.core.auto_narrator import AutoIntent, AutoNarrator
 from narrative_engine.core.beat_manager import BeatManager
 from narrative_engine.core.interpreter import ConfigInterpreter
 from narrative_engine.core.memory import MemoryManager
@@ -35,6 +36,8 @@ __all__ = [
     "NarrativeEngine",
     "AIDirector",
     "DirectorError",
+    "AutoNarrator",
+    "AutoIntent",
     "BeatManager",
     "ConfigInterpreter",
     "MemoryManager",

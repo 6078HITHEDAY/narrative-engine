@@ -171,6 +171,10 @@ class NarrativeEngine:
         return self._memory
 
     @property
+    def director(self) -> AIDirector:
+        return self._director
+
+    @property
     def current_chapter(self) -> str:
         return self._current_chapter
 

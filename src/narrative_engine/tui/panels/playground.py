@@ -10,6 +10,7 @@ from textual.widgets import (
 )
 
 from narrative_engine import GameState, WorldState, NarrativeOutput, PlayerState
+from narrative_engine.core.auto_narrator import AutoNarrator
 from narrative_engine.tui.state import get_state
 from narrative_engine.tui.widgets.streaming_output import StreamingOutput
 
@@ -34,10 +35,19 @@ class PlaygroundPanel(VerticalScroll):
         super().__init__(*args, **kwargs)
         self._last_state: GameState | None = None
         self._last_output: NarrativeOutput | None = None
+        self._narrator: AutoNarrator | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="play-input"):
             yield Label("[bold]交互测试[/]")
+            with Horizontal(classes="row"):
+                yield Label("智能模式:", classes="inline")
+                yield Switch(value=False, id="auto_mode")
+                yield Label("[dim]开启后只用自然语言；关闭走手动 kind+npc[/]", classes="inline")
+            with Horizontal(classes="row", id="auto_row"):
+                yield Label("说点什么:", classes="inline")
+                yield Input(placeholder="例如：我走进酒馆，找老板说话", id="auto_input")
+                yield Button("发送", id="auto_send_btn", variant="primary")
             with Horizontal(classes="row"):
                 yield Label("Area:", classes="inline")
                 yield Input(placeholder="<area>", id="area")
@@ -74,11 +84,25 @@ class PlaygroundPanel(VerticalScroll):
         if state.engine and state.engine.npcs:
             options.extend((f"{n.name} ({n.id})", n.id) for n in state.engine.npcs.values())
         sel.set_options(options)
+        self._sync_auto_mode(self.query_one("#auto_mode", Switch).value)
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        if event.switch.id == "auto_mode":
+            self._sync_auto_mode(event.value)
+
+    def _sync_auto_mode(self, auto_on: bool) -> None:
+        self.query_one("#auto_row", Horizontal).display = auto_on
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "auto_input":
+            self._trigger_auto()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id or ""
         if bid == "gen_btn":
             self._do_generate()
+        elif bid == "auto_send_btn":
+            self._trigger_auto()
         elif bid == "clear_btn":
             self.query_one("#play-output", StreamingOutput).clear()
             self._clear_choices()
@@ -90,10 +114,18 @@ class PlaygroundPanel(VerticalScroll):
             self.query_one("#history-log", RichLog).clear()
             self._last_state = None
             self._last_output = None
+            self._narrator = None
             self._clear_choices()
             self.query_one("#gen-status", Static).update("[green]会话已重置[/]")
         elif bid.startswith("choice-"):
             self._on_choice_clicked(int(bid.removeprefix("choice-")))
+
+    def _trigger_auto(self) -> None:
+        text = self.query_one("#auto_input", Input).value.strip()
+        if not text:
+            return
+        self.query_one("#auto_input", Input).value = ""
+        self._do_auto_generate(text)
 
     def _build_state(self) -> GameState:
         area = self.query_one("#area", Input).value.strip()
@@ -104,6 +136,40 @@ class PlaygroundPanel(VerticalScroll):
             world=WorldState(area=area, chapter=chapter),
             player=PlayerState(inventory=inventory),
         )
+
+    @work(thread=False)
+    async def _do_auto_generate(self, user_input: str) -> None:
+        state = get_state()
+        if not state.engine:
+            return
+        if self._narrator is None:
+            self._narrator = AutoNarrator(state.engine, self._build_state())
+
+        status = self.query_one("#gen-status", Static)
+        output = self.query_one("#play-output", StreamingOutput)
+        history = self.query_one("#history-log", RichLog)
+        self._clear_choices()
+
+        history.write(f"[dim]>[/] {user_input}")
+        status.update("[yellow]智能模式生成中...[/]")
+        output.clear()
+
+        try:
+            intent, result = await self._narrator.respond(user_input)
+        except Exception as e:
+            status.update(f"[red]错误: {e}[/]")
+            return
+
+        output.show_result(result.model_dump())
+        tag = intent.kind
+        if intent.npc_id:
+            tag = f"{intent.npc_id}/{intent.kind}"
+        if intent.new_area:
+            history.write(f"  [bold cyan]→ 切到 {intent.new_area}[/]")
+        status.update(
+            f"[green]完成[/] {tag} backend={result.backend} tokens={result.tokens_used}"
+        )
+        self._record_result(self._narrator.state, result, history, intent.kind, user_input)
 
     @work(thread=False)
     async def _do_generate(self) -> None:
