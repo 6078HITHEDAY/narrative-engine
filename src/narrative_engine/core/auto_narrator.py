@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Literal
 
 from jinja2 import Environment, PackageLoader, select_autoescape
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from narrative_engine.core.engine import NarrativeEngine
 from narrative_engine.models.narrative import Event, NarrativeOutput

@@ -627,7 +627,7 @@ narrative-engine <command> [options]
 | `NARRATIVE_STRUCTURED_OUTPUT_MODE` | 结构化输出模式 (`tools` / `json`) | (空，自动探测) |
 | `NARRATIVE_REASONING_MODEL` | 是否启用 reasoning 模式 | (空) |
 | `NARRATIVE_REASONING_MAX_TOKENS` | reasoning 模式最大 token 数 | (空) |
-| `NARRATIVE_GENERATOR_MAX_TOKENS` | story generator 最大 token 数 | `4096` |
+| `NARRATIVE_GENERATOR_MAX_TOKENS` | story generator 最大 token 数 | `8192` |
 
 ### 交互模式
 
