@@ -230,6 +230,8 @@ def test_chapter_world_omits_empty_fields_from_yaml(tmp_path: Path):
     assert "time" not in world
     assert "weather" not in world
     assert "chapter" not in world
+    assert world["setting"] == "主舞台"
+    assert world["tone"] == "neutral"
 
 
 def test_generated_story_immediately_runnable(tmp_path: Path):
