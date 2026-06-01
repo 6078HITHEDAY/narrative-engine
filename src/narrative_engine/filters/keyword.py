@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import re
 
-from narrative_engine.models.config import EngineConfig
-
 
 class KeywordFilter:
     def __init__(self, blacklist: list[str] | None = None) -> None:

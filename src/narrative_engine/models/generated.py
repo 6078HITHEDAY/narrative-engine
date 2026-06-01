@@ -39,6 +39,10 @@ class GeneratedChapter(BaseModel):
     title: str
     world_setting: str = Field(description="章节级世界观，覆盖故事级 default_world")
     tone: str = "neutral"
+    area: str = Field(default="", description="章节起始区域，必须能匹配至少一个 world.area 触发器")
+    time: str = Field(default="", description="章节起始时间，如 midnight 或 清晨")
+    weather: str = Field(default="", description="章节起始天气，如 rain 或 阴")
+    chapter: str = Field(default="", description="章节标识，建议使用 snake_case")
     beats: list[GeneratedBeat] = Field(default_factory=list, min_length=3)
 
 
