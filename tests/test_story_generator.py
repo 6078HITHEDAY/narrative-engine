@@ -16,6 +16,7 @@ from narrative_engine.models.generated import (
     GeneratedNPC,
     GeneratedStory,
 )
+from narrative_engine.generators.story_generator import DEFAULT_GENERATOR_MAX_TOKENS
 
 
 def _fake_story() -> GeneratedStory:
@@ -40,6 +41,10 @@ def _fake_story() -> GeneratedStory:
                 title="第一章",
                 world_setting="主舞台",
                 tone="neutral",
+                area="main",
+                time="midnight",
+                weather="rain",
+                chapter="chapter_1",
                 beats=[
                     GeneratedBeat(
                         id="b1", kind="description", priority=100,
@@ -80,6 +85,26 @@ def test_generate_writes_three_files(tmp_path: Path):
     assert (out / "story.yaml").is_file()
     assert (out / "npcs.yaml").is_file()
     assert (out / "chapters" / "chapter_1.yaml").is_file()
+
+
+def test_generator_env_backend_uses_large_default_max_tokens(monkeypatch):
+    monkeypatch.setenv("NARRATIVE_API_KEY", "test-key")
+    monkeypatch.delenv("NARRATIVE_GENERATOR_MAX_TOKENS", raising=False)
+
+    backend = StoryGenerator._backend_from_env()
+
+    assert backend is not None
+    assert backend.max_tokens == DEFAULT_GENERATOR_MAX_TOKENS
+
+
+def test_generator_env_backend_allows_max_tokens_override(monkeypatch):
+    monkeypatch.setenv("NARRATIVE_API_KEY", "test-key")
+    monkeypatch.setenv("NARRATIVE_GENERATOR_MAX_TOKENS", "12345")
+
+    backend = StoryGenerator._backend_from_env()
+
+    assert backend is not None
+    assert backend.max_tokens == 12345
 
 
 def test_generated_story_loadable_by_story_loader(tmp_path: Path):
@@ -145,6 +170,20 @@ def test_event_beat_choices_persisted(tmp_path: Path):
     assert event_beat.kind == "event"
     assert event_beat.event_choices == ["选 A", "选 B"]
     assert event_beat.event_consequences == {"选 A": "好结果", "选 B": "坏结果"}
+
+
+def test_chapter_world_fields_persisted(tmp_path: Path):
+    gen = _make_generator()
+    out = tmp_path / "story"
+    with patch.object(gen._director, "generate", return_value=(_fake_story(), "raw", 100)):
+        gen.generate("测试", out)
+
+    _, _, chapters = StoryLoader(str(out)).load()
+    world = chapters["chapter_1"].world
+    assert world.area == "main"
+    assert world.time == "midnight"
+    assert world.weather == "rain"
+    assert world.chapter == "chapter_1"
 
 
 def test_generated_story_immediately_runnable(tmp_path: Path):

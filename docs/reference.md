@@ -344,7 +344,7 @@ backend = LLMBackend(
 gen = StoryGenerator(backend)
 ```
 
-生成质量取决于模型能力——推荐用参数较大的模型（如 `deepseek-v4-pro`、`claude-sonnet-4-6`），并通过 `NARRATIVE_GENERATOR_MAX_TOKENS` 环境变量控制输出长度（默认 4096）。
+生成质量取决于模型能力——推荐用参数较大的模型（如 `deepseek-v4-pro`、`claude-sonnet-4-6`），并通过 `NARRATIVE_GENERATOR_MAX_TOKENS` 环境变量控制输出长度（默认 8192）。
 
 完整示例见 `examples/generate_story.py`。
 
@@ -610,7 +610,7 @@ LLM 调用失败后自动以 `temperature × 0.6` 重试一次，处理网络超
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `NARRATIVE_GENERATOR_MAX_TOKENS` | StoryGenerator 调 LLM 时的 `max_tokens`，控制输出长度 | `4096` |
+| `NARRATIVE_GENERATOR_MAX_TOKENS` | StoryGenerator 调 LLM 时的 `max_tokens`，控制输出长度 | `8192` |
 
 ### LLMBackend 字段对照
 

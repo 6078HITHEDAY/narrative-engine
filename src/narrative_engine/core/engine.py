@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import json
 import logging
 import random
 from pathlib import Path
 
 import narrative_engine.settings  # noqa: F401  # 触发 .env 自动加载
 
+from narrative_engine._env import backend_from_env
 from narrative_engine.core.beat_manager import BeatManager
 from narrative_engine.core.cache import CacheManager
 from narrative_engine.core.context import ContextManager
 from narrative_engine.core.director import AIDirector
 from narrative_engine.core.memory import MemoryManager
 from narrative_engine.filters.keyword import KeywordFilter
-from narrative_engine.models.config import EngineConfig, LLMBackend, RuntimeConfig
+from narrative_engine.models.config import EngineConfig, LLMBackend, ProviderKind, RuntimeConfig
 from narrative_engine.models.narrative import (
     NarrativeOutput,
     Dialogue,
@@ -58,7 +58,16 @@ class NarrativeEngine:
         if not self._config.backend.api_key:
             env_backend = self._backend_from_env()
             if env_backend:
-                self._config.backend = env_backend
+                if self._backend_is_unconfigured(self._config.backend):
+                    self._config.backend = env_backend
+                else:
+                    self._config.backend.api_key = env_backend.api_key
+                    if not self._config.backend.api_base:
+                        self._config.backend.api_base = env_backend.api_base
+            else:
+                logger.warning(
+                    "未检测到 NARRATIVE_API_KEY，LLM 生成将全部走 Fallback 降级文案。请设置环境变量 NARRATIVE_API_KEY 或在 TUI 面板中配置。"
+                )
 
         self._director = AIDirector(self._config.backend)
         self._context_mgr = ContextManager(
@@ -106,37 +115,16 @@ class NarrativeEngine:
 
     @staticmethod
     def _backend_from_env() -> LLMBackend | None:
-        import os
-        api_key = os.environ.get("NARRATIVE_API_KEY", "")
-        if not api_key:
-            return None
-        from narrative_engine.models.config import ProviderKind
-        backend_raw = os.environ.get("NARRATIVE_BACKEND", "openai")
-        try:
-            provider = ProviderKind(backend_raw)
-        except ValueError:
-            valid = ", ".join(p.value for p in ProviderKind)
-            logger.warning(
-                "Unknown NARRATIVE_BACKEND=%r, falling back to 'openai' (valid: %s)",
-                backend_raw, valid,
-            )
-            provider = ProviderKind.openai
-        kwargs: dict = dict(
-            provider=provider,
-            api_key=api_key,
-            api_base=os.environ.get("NARRATIVE_API_BASE", ""),
-            model=os.environ.get("NARRATIVE_MODEL", ""),
+        return backend_from_env()
+
+    @staticmethod
+    def _backend_is_unconfigured(backend: LLMBackend) -> bool:
+        return (
+            backend.provider == ProviderKind.openai
+            and not backend.model
+            and not backend.api_key
+            and not backend.api_base
         )
-        mode = os.environ.get("NARRATIVE_STRUCTURED_OUTPUT_MODE", "")
-        if mode:
-            kwargs["structured_output_mode"] = mode
-        reasoning = os.environ.get("NARRATIVE_REASONING_MODEL", "")
-        if reasoning:
-            kwargs["reasoning_model"] = reasoning.lower() in ("1", "true", "yes")
-        reasoning_max = os.environ.get("NARRATIVE_REASONING_MAX_TOKENS", "")
-        if reasoning_max:
-            kwargs["reasoning_max_tokens"] = int(reasoning_max)
-        return LLMBackend(**kwargs)
 
     @staticmethod
     def _load_engine_backend(config_dir: str) -> LLMBackend | None:
@@ -270,8 +258,6 @@ class NarrativeEngine:
         return self._npcs.pop(npc_id, None) is not None
 
     def _apply_chapter(self, ch) -> None:
-        from narrative_engine.models.config import ChapterConfig
-
         self._current_chapter = ch.title
         self._context_mgr.update_world_setting(ch.world.setting)
         self._beat_manager.replace_beats(ch.beats)

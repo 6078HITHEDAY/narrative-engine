@@ -14,6 +14,14 @@ import json
 import sys
 
 
+def _create_engine_from_env() -> "NarrativeEngine":
+    from narrative_engine import NarrativeEngine
+    from narrative_engine._env import backend_from_env
+
+    backend = backend_from_env()
+    return NarrativeEngine(backend=backend) if backend else NarrativeEngine()
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("narrative-engine v0.1.0")
@@ -176,19 +184,9 @@ def _parse_args(args: list[str]) -> dict:
 
 
 def _run_generation(kind: str, kwargs: dict) -> None:
-    import os
-    from narrative_engine import NarrativeEngine, GameState, WorldState, NPCState
-    from narrative_engine.models.config import ProviderKind
+    from narrative_engine import GameState, WorldState, NPCState
 
-    backend = os.environ.get("NARRATIVE_BACKEND", "openai")
-    engine = NarrativeEngine({
-        "backend": {
-            "provider": ProviderKind(backend),
-            "api_key": os.environ.get("NARRATIVE_API_KEY", ""),
-            "api_base": os.environ.get("NARRATIVE_API_BASE", ""),
-            "model": os.environ.get("NARRATIVE_MODEL", ""),
-        },
-    })
+    engine = _create_engine_from_env()
 
     npc_id = kwargs.get("npc", "")
     npcs = {}
@@ -215,19 +213,9 @@ def _interactive() -> None:
     print("示例: dialogue <area> <npc_id> <context>")
     print()
 
-    import os
-    from narrative_engine import NarrativeEngine, GameState, WorldState, NPCState
-    from narrative_engine.models.config import ProviderKind
+    from narrative_engine import GameState, WorldState, NPCState
 
-    backend = os.environ.get("NARRATIVE_BACKEND", "openai")
-    engine = NarrativeEngine({
-        "backend": {
-            "provider": ProviderKind(backend),
-            "api_key": os.environ.get("NARRATIVE_API_KEY", ""),
-            "api_base": os.environ.get("NARRATIVE_API_BASE", ""),
-            "model": os.environ.get("NARRATIVE_MODEL", ""),
-        },
-    })
+    engine = _create_engine_from_env()
 
     while True:
         try:

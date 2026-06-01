@@ -17,38 +17,31 @@ from pathlib import Path
 import yaml
 from jinja2 import Environment, PackageLoader
 
+from narrative_engine._env import backend_from_env
 from narrative_engine.core.director import AIDirector
 from narrative_engine.models.config import LLMBackend
 from narrative_engine.models.generated import GeneratedStory
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_GENERATOR_MAX_TOKENS = 8192
+
 
 class StoryGenerator:
     """根据自然语言灵感生成完整故事目录。"""
 
     def __init__(self, backend: LLMBackend | None = None) -> None:
-        self._backend = backend or self._backend_from_env() or LLMBackend()
+        self._backend = backend or self._backend_from_env() or LLMBackend(
+            max_tokens=DEFAULT_GENERATOR_MAX_TOKENS,
+        )
         self._director = AIDirector(self._backend)
         self._env = Environment(loader=PackageLoader("narrative_engine", "prompts"))
 
     @staticmethod
     def _backend_from_env() -> LLMBackend | None:
-        import os
-        api_key = os.environ.get("NARRATIVE_API_KEY", "")
-        if not api_key:
-            return None
-        from narrative_engine.models.config import ProviderKind
-        try:
-            provider = ProviderKind(os.environ.get("NARRATIVE_BACKEND", "openai"))
-        except ValueError:
-            provider = ProviderKind.openai
-        return LLMBackend(
-            provider=provider,
-            api_key=api_key,
-            api_base=os.environ.get("NARRATIVE_API_BASE", ""),
-            model=os.environ.get("NARRATIVE_MODEL", ""),
-            max_tokens=int(os.environ.get("NARRATIVE_GENERATOR_MAX_TOKENS", "4096")),
+        return backend_from_env(
+            max_tokens_env="NARRATIVE_GENERATOR_MAX_TOKENS",
+            default_max_tokens=DEFAULT_GENERATOR_MAX_TOKENS,
         )
 
     def generate(
@@ -157,13 +150,22 @@ class StoryGenerator:
                     entry["event_consequences"] = beat.event_consequences
                 beats_data.append(entry)
 
-            chapter_yaml = {
-                "title": chapter.title,
-                "world": {
+            world = {
+                k: v for k, v in {
                     "setting": chapter.world_setting,
                     "tone": chapter.tone,
-                },
-                "beats": beats_data,
+                    "area": chapter.area,
+                    "time": chapter.time,
+                    "weather": chapter.weather,
+                    "chapter": chapter.chapter,
+                }.items() if v not in ("", [], {}, None)
+            }
+            chapter_yaml = {
+                k: v for k, v in {
+                    "title": chapter.title,
+                    "world": world,
+                    "beats": beats_data,
+                }.items() if v not in ("", [], {}, None)
             }
             _dump_yaml(chapters_dir / f"chapter_{idx}.yaml", chapter_yaml)
 
